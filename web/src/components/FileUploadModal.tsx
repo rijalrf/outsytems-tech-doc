@@ -72,8 +72,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="bg-surface w-full max-w-lg rounded-panel border border-outline shadow-2xl p-6 sm:p-8 relative">
+    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-surface w-full max-w-lg rounded-panel border border-outline shadow-2xl p-6 sm:p-8 relative my-auto">
         
         {/* Close Button */}
         <button

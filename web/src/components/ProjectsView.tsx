@@ -78,7 +78,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
     <div className="space-y-8">
       
       {/* Top Banner / Hero Card */}
-      <div className="bg-surface rounded-panel border border-outline shadow-card p-6 sm:p-8 lg:p-10 relative overflow-hidden">
+      <div className="bg-surface rounded-card-lg border border-outline shadow-sm p-6 sm:p-8 lg:p-10 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-pill bg-primary-soft text-primary text-xs font-black uppercase tracking-wider">
@@ -96,7 +96,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
           {/* Create Project Button */}
           <button
             onClick={() => setIsModalOpen(true)}
-            className="h-12 px-6 rounded-pill bg-primary hover:bg-primary-strong text-white font-bold text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all shrink-0"
+            className="h-12 px-6 rounded-pill bg-primary hover:bg-primary-strong text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Tambah Project Baru</span>
@@ -210,8 +210,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
 
       {/* Modal Add Project */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-surface w-full max-w-md rounded-panel border border-outline shadow-2xl p-6 sm:p-8 relative">
+        <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-surface w-full max-w-md rounded-panel border border-outline shadow-2xl p-6 sm:p-8 relative my-auto">
             <h3 className="text-xl font-black text-on-background mb-1">Buat Project Baru</h3>
             <p className="text-xs text-gray-500 mb-6">
               Masukkan nama dan deskripsi ringkas untuk project OutSystems Anda.

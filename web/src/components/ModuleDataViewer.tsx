@@ -1,22 +1,48 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Terminal, 
-  Copy, 
-  Check, 
-  Download, 
   ArrowLeft, 
-  Cpu, 
   Loader2, 
   AlertCircle,
-  FileJson
+  Zap,
+  Globe,
+  Database,
+  ListOrdered,
+  AlertTriangle,
+  Layers,
+  ShieldAlert,
+  Settings2,
+  Code
 } from 'lucide-react';
 import type { ModuleSummary } from '../types/api';
 import { api } from '../services/api';
+import { ensureArray } from '../utils/helpers';
+
+import { ModuleInfoCard } from './module-tabs/ModuleInfoCard';
+import { ModuleActionsTab } from './module-tabs/ModuleActionsTab';
+import { ModuleServiceActionsTab } from './module-tabs/ModuleServiceActionsTab';
+import { ModuleEntitiesTab } from './module-tabs/ModuleEntitiesTab';
+import { ModuleStaticEntitiesTab } from './module-tabs/ModuleStaticEntitiesTab';
+import { ModuleExceptionsTab } from './module-tabs/ModuleExceptionsTab';
+import { ModuleStructuresTab } from './module-tabs/ModuleStructuresTab';
+import { ModuleRolesTab } from './module-tabs/ModuleRolesTab';
+import { ModuleSitePropertiesTab } from './module-tabs/ModuleSitePropertiesTab';
+import { ModuleRawJsonTab } from './module-tabs/ModuleRawJsonTab';
 
 interface ModuleDataViewerProps {
   module: ModuleSummary;
   onBackToModules: () => void;
 }
+
+type TabType =
+  | 'actions'
+  | 'service-actions'
+  | 'entities'
+  | 'static-entities'
+  | 'exceptions'
+  | 'structures'
+  | 'roles'
+  | 'site-properties'
+  | 'raw-json';
 
 export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
   module,
@@ -25,8 +51,7 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
   const [rawData, setRawData] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState<boolean>(false);
-  const [selectedSection, setSelectedSection] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<TabType>('actions');
 
   useEffect(() => {
     const fetchModuleData = async () => {
@@ -36,7 +61,7 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
         const data = await api.getModuleData(module.id);
         setRawData(data);
       } catch (err: any) {
-        setError(err.message || 'Gagal memuat respon data mentah modul');
+        setError(err.message || 'Gagal memuat data modul');
       } finally {
         setLoading(false);
       }
@@ -45,51 +70,51 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
     fetchModuleData();
   }, [module.id]);
 
-  const handleCopy = () => {
-    if (!rawData) return;
-    const contentToCopy = selectedSection === 'all' 
-      ? JSON.stringify(rawData, null, 2) 
-      : JSON.stringify(rawData[selectedSection] ?? {}, null, 2);
-    
-    navigator.clipboard.writeText(contentToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  // Compute counts for tab badges
+  const actionsCount = ensureArray(rawData?.Actions?.Action).length;
+  const serviceActionsCount = ensureArray(
+    rawData?.ServiceAPIMethods?.ServiceAction ||
+    rawData?.ServiceAPIMethods?.ServiceApiMethod ||
+    rawData?.ServiceActions?.ServiceAction
+  ).length;
+  
+  const allEntities = ensureArray(rawData?.Entities?.Entity);
+  const entitiesCount = allEntities.filter(
+    (e: any) => e?.IsStaticEntity !== 'Yes' && e?.isStaticEntity !== true
+  ).length;
+  const staticEntitiesCount = allEntities.filter(
+    (e: any) => e?.IsStaticEntity === 'Yes' || e?.isStaticEntity === true
+  ).length;
 
-  const handleDownload = () => {
-    if (!rawData) return;
-    const content = selectedSection === 'all'
-      ? JSON.stringify(rawData, null, 2)
-      : JSON.stringify(rawData[selectedSection] ?? {}, null, 2);
-    
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${module.module_name}_${selectedSection}_raw.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  // Available sections extracted from OutSystems JSON
-  const availableSections = ['all'];
-  if (rawData && typeof rawData === 'object') {
-    Object.keys(rawData).forEach((key) => {
-      if (key !== 'Key' && key !== 'Name') {
-        availableSections.push(key);
-      }
+  let exceptionsCount = 0;
+  if (rawData?.Exceptions && typeof rawData.Exceptions === 'object') {
+    Object.values(rawData.Exceptions).forEach((val) => {
+      exceptionsCount += ensureArray(val).length;
     });
   }
 
-  const getDisplayedData = () => {
-    if (!rawData) return null;
-    if (selectedSection === 'all') return rawData;
-    return rawData[selectedSection] ?? { message: `Section '${selectedSection}' tidak memiliki data.` };
-  };
+  const structuresCount = ensureArray(rawData?.Structures?.Structure).length;
+  const rolesCount =
+    ensureArray(rawData?.SystemRoles?.SystemRole).length +
+    ensureArray(rawData?.Roles?.Role).length;
+  const sitePropsCount = ensureArray(rawData?.SiteProperties?.SiteProperty).length;
 
-  const formattedJsonString = rawData ? JSON.stringify(getDisplayedData(), null, 2) : '';
+  const tabs: Array<{
+    id: TabType;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    count?: number;
+  }> = [
+    { id: 'actions', label: 'Action', icon: Zap, count: actionsCount },
+    { id: 'service-actions', label: 'Service Action', icon: Globe, count: serviceActionsCount },
+    { id: 'entities', label: 'Entities', icon: Database, count: entitiesCount },
+    { id: 'static-entities', label: 'Static Entities', icon: ListOrdered, count: staticEntitiesCount },
+    { id: 'exceptions', label: 'Exception', icon: AlertTriangle, count: exceptionsCount },
+    { id: 'structures', label: 'Structures', icon: Layers, count: structuresCount },
+    { id: 'roles', label: 'Roles', icon: ShieldAlert, count: rolesCount },
+    { id: 'site-properties', label: 'Site Properties', icon: Settings2, count: sitePropsCount },
+    { id: 'raw-json', label: 'Raw JSON', icon: Code },
+  ];
 
   return (
     <div className="space-y-6">
@@ -98,148 +123,87 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <button
           onClick={onBackToModules}
-          className="inline-flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-primary transition-colors bg-surface px-4 py-2 rounded-pill border border-outline w-fit shadow-sm"
+          className="inline-flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-primary transition-colors bg-surface px-4 py-2 rounded-pill border border-outline w-fit shadow-2xs"
         >
           <ArrowLeft className="w-4 h-4 text-primary" />
           <span>Kembali ke Modul {module.module_name}</span>
         </button>
+      </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+      {/* 1. Module Info Top Card */}
+      <ModuleInfoCard module={module} rawData={rawData} />
+
+      {/* Loading & Error States */}
+      {loading ? (
+        <div className="py-24 bg-surface rounded-card border border-outline shadow-2xs flex flex-col items-center justify-center text-center space-y-3">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          <p className="text-xs text-gray-500 font-medium">Memuat data modul OutSystems...</p>
+        </div>
+      ) : error ? (
+        <div className="p-6 bg-surface rounded-card border border-rose-200 text-center space-y-3 shadow-2xs">
+          <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+          <p className="text-sm font-bold text-rose-800">{error}</p>
           <button
-            onClick={handleCopy}
-            disabled={!rawData || loading}
-            className="h-10 px-4 rounded-pill bg-surface hover:bg-surface-soft border border-outline text-xs font-bold text-gray-700 flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-pill bg-rose-100 text-rose-800 text-xs font-bold hover:bg-rose-200 transition-colors"
           >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-success" />
-                <span className="text-success">Tersalin ke Clipboard!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5 text-primary" />
-                <span>Salin Raw JSON</span>
-              </>
+            Coba Muat Ulang
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* 2. Tabs Navigation */}
+          <div className="bg-surface rounded-card border border-outline p-1.5 shadow-2xs overflow-x-auto">
+            <div className="flex items-center gap-1 min-w-max">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                      isActive
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'text-gray-600 hover:text-primary hover:bg-surface-soft'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                    <span>{tab.label}</span>
+                    {tab.count !== undefined && (
+                      <span
+                        className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 3. Tab Content View */}
+          <div className="pt-2">
+            {activeTab === 'actions' && <ModuleActionsTab rawData={rawData} />}
+            {activeTab === 'service-actions' && <ModuleServiceActionsTab rawData={rawData} />}
+            {activeTab === 'entities' && <ModuleEntitiesTab rawData={rawData} />}
+            {activeTab === 'static-entities' && <ModuleStaticEntitiesTab rawData={rawData} />}
+            {activeTab === 'exceptions' && <ModuleExceptionsTab rawData={rawData} />}
+            {activeTab === 'structures' && <ModuleStructuresTab rawData={rawData} />}
+            {activeTab === 'roles' && <ModuleRolesTab rawData={rawData} />}
+            {activeTab === 'site-properties' && <ModuleSitePropertiesTab rawData={rawData} />}
+            {activeTab === 'raw-json' && (
+              <ModuleRawJsonTab moduleName={module.module_name} rawData={rawData} />
             )}
-          </button>
-
-          <button
-            onClick={handleDownload}
-            disabled={!rawData || loading}
-            className="h-10 px-4 rounded-pill bg-primary hover:bg-primary-strong text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Download JSON</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Module Overview Card */}
-      <div className="bg-surface rounded-card-lg border border-outline p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg shadow-sm">
-            <Cpu className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-on-background">{module.module_name}</h2>
-              {module.module_suffix && (
-                <span className="text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full bg-blue-100 text-primary-strong">
-                  _{module.module_suffix}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 font-mono mt-0.5">
-              ESpace Key: {module.espace_key || 'N/A'} • Module ID: {module.id}
-            </p>
           </div>
         </div>
-
-        <div className="flex items-center gap-2 text-xs">
-          <span className="px-3 py-1 rounded-pill bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
-            Status: {module.status || 'PARSED'}
-          </span>
-        </div>
-      </div>
-
-      {/* Main Terminal / Dark Raw JSON Panel */}
-      <div 
-        className="rounded-panel p-6 sm:p-8 text-white shadow-panel-dark border border-slate-700/80 relative overflow-hidden"
-        style={{ background: 'linear-gradient(145deg, #172033 0%, #0f172a 58%, #111827 100%)' }}
-      >
-        {/* Glow backdrop */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Terminal Header */}
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between pb-5 border-b border-slate-700/80 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-rose-500/80" />
-              <span className="w-3 h-3 rounded-full bg-amber-500/80" />
-              <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
-            </div>
-            <div className="h-4 w-[1px] bg-slate-700" />
-            <div className="flex items-center gap-2">
-              <Terminal className="w-4 h-4 text-blue-400" />
-              <span className="font-mono text-xs text-slate-200 font-bold">
-                OUTSYSTEMS RAW RESPONSE JSON INSPECTOR
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-slate-400">
-              {loading ? 'Fetching JSON...' : `${formattedJsonString.length} chars`}
-            </span>
-          </div>
-        </div>
-
-        {/* Section Filter Pills */}
-        {availableSections.length > 1 && (
-          <div className="relative z-10 py-4 flex flex-wrap items-center gap-2 border-b border-slate-800">
-            <span className="text-xs text-slate-400 font-bold uppercase tracking-wider mr-1">Section:</span>
-            {availableSections.map((sec) => (
-              <button
-                key={sec}
-                onClick={() => setSelectedSection(sec)}
-                className={`px-3 py-1 rounded-pill text-xs font-mono font-bold transition-all ${
-                  selectedSection === sec
-                    ? 'bg-primary text-white shadow-md border border-blue-400'
-                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700'
-                }`}
-              >
-                {sec === 'all' ? 'All (Full Raw JSON)' : sec}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Terminal Content Body */}
-        <div className="relative z-10 pt-4">
-          {loading ? (
-            <div className="py-24 flex flex-col items-center justify-center text-center space-y-3">
-              <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-              <p className="text-xs text-slate-400 font-mono">Mengambil respon mentah data modul dari database...</p>
-            </div>
-          ) : error ? (
-            <div className="py-16 px-4 flex flex-col items-center justify-center text-center space-y-3">
-              <AlertCircle className="w-8 h-8 text-rose-400" />
-              <p className="text-xs text-rose-300 font-mono">{error}</p>
-            </div>
-          ) : !rawData || Object.keys(rawData).length === 0 ? (
-            <div className="py-20 flex flex-col items-center justify-center text-center space-y-3">
-              <FileJson className="w-8 h-8 text-slate-500" />
-              <p className="text-xs text-slate-400 font-mono">Data modul masih kosong atau belum diproses.</p>
-            </div>
-          ) : (
-            <pre className="p-4 sm:p-6 rounded-2xl bg-slate-950/80 border border-slate-800/90 font-mono text-xs sm:text-[13px] text-emerald-400 leading-relaxed overflow-x-auto max-h-[600px] select-text shadow-inner">
-              <code>{formattedJsonString}</code>
-            </pre>
-          )}
-        </div>
-
-      </div>
+      )}
 
     </div>
   );

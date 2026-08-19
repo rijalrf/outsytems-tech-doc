@@ -66,7 +66,7 @@ export const ModulesView: React.FC<ModulesViewProps> = ({
     <div className="space-y-8">
       
       {/* Application Banner Header */}
-      <div className="bg-surface rounded-panel border border-outline shadow-card p-6 sm:p-8 relative overflow-hidden">
+      <div className="bg-surface rounded-card-lg border border-outline shadow-sm p-6 sm:p-8 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
             <button
@@ -101,7 +101,7 @@ export const ModulesView: React.FC<ModulesViewProps> = ({
           {/* Upload OML CTA */}
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            className="h-12 px-6 rounded-pill bg-primary hover:bg-primary-strong text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all shrink-0"
+            className="h-12 px-6 rounded-pill bg-primary hover:bg-primary-strong text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all shrink-0"
           >
             <UploadCloud className="w-4 h-4" />
             <span>Upload Modul (.oml)</span>
