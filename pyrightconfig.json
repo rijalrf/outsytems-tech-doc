@@ -1,0 +1,16 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": [
+    "api"
+  ],
+  "include": [
+    "api"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".venv"
+  ]
+}
+
