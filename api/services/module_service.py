@@ -9,6 +9,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from clients import outsystems_client
+from core import cache
 from models import application_model, module_model
 from services import application_service
 
@@ -339,6 +340,10 @@ def save_parsed_result(
 
     db.commit()
     db.refresh(app_record)
+
+    # Invalidate backend cache karena ada modul baru / update
+    cache.memory_cache.clear()
+
     return app_record
 
 
@@ -368,10 +373,17 @@ def get_module_response_data(
     module_id: uuid.UUID,
 ) -> Optional[Dict[str, Any]]:
     """
-    Mengambil khusus response data JSON (parsed_data) dari tabel modules berdasarkan UUID modul.
+    Mengambil khusus response data JSON (parsed_data) dari tabel modules berdasarkan UUID modul
+    dengan in-memory caching untuk mempercepat response.
     """
+    cache_key = f"module_data:{module_id}"
+    cached_data = cache.memory_cache.get(cache_key)
+    if cached_data is not None:
+        return cached_data
+
     module = get_module_by_id(db=db, module_id=module_id)
-    if module:
+    if module and module.parsed_data:
+        cache.memory_cache.set(cache_key, module.parsed_data)
         return module.parsed_data
     return None
 
@@ -410,11 +422,16 @@ def get_module_project_info(
     Mengambil 'Project Info' / metadata modul dari tabel modules
     (Key, Name, Suffix, UserProviderEspace, DefaultTransition, UseCookies, WebScreenRenderingMode, ModuleType, dll).
     """
+    cache_key = f"module_info:{module_id}"
+    cached_info = cache.memory_cache.get(cache_key)
+    if cached_info is not None:
+        return cached_info
+
     module = get_module_by_id(db=db, module_id=module_id)
     if not module:
         return None
 
-    return {
+    info = {
         "id": str(module.id),
         "application_id": str(module.application_id),
         "Key": module.espace_key,
@@ -429,6 +446,8 @@ def get_module_project_info(
         "created_at": module.created_at.isoformat() if module.created_at else None,
         "updated_at": module.updated_at.isoformat() if module.updated_at else None,
     }
+    cache.memory_cache.set(cache_key, info)
+    return info
 
 
 def get_module_section_data(
@@ -456,74 +475,470 @@ def get_module_section_data(
     return None
 
 
+def _filter_dict_or_list_by_search(
+    data: Any,
+    search: Optional[str],
+    wrapper_key: str,
+    search_fields: List[str],
+) -> Any:
+    """
+    Helper untuk memfilter item dalam dict OutSystems (seperti {'Entity': [...]}) atau list.
+    """
+    if not search or not search.strip():
+        return data
+
+    query = search.strip().lower()
+
+    # Jika data adalah dictionary yang membungkus list (misal: {'Entity': [...]})
+    if isinstance(data, dict):
+        target_list = None
+        key_found = wrapper_key
+        for k, v in data.items():
+            if k.lower() == wrapper_key.lower():
+                target_list = v
+                key_found = k
+                break
+
+        if target_list is not None:
+            if isinstance(target_list, dict):
+                target_list = [target_list]
+            if isinstance(target_list, list):
+                filtered = []
+                for item in target_list:
+                    if not isinstance(item, dict):
+                        continue
+                    # Cek field utama
+                    match = any(
+                        query in str(item.get(f, "")).lower()
+                        for f in search_fields
+                        if item.get(f) is not None
+                    )
+                    # Cek nested attributes jika ada
+                    if not match and "Attributes" in item:
+                        attrs = item.get("Attributes", {}).get("Attribute", [])
+                        if isinstance(attrs, dict):
+                            attrs = [attrs]
+                        if isinstance(attrs, list):
+                            match = any(
+                                isinstance(a, dict) and query in str(a.get("Name", "")).lower()
+                                for a in attrs
+                            )
+                    # Cek nested static records jika ada
+                    if not match and "StaticRecords" in item:
+                        recs = item.get("StaticRecords", {}).get("StaticRecord", [])
+                        if isinstance(recs, dict):
+                            recs = [recs]
+                        if isinstance(recs, list):
+                            match = any(
+                                isinstance(r, dict) and query in str(r.get("Name", "")).lower()
+                                for r in recs
+                            )
+                    if match:
+                        filtered.append(item)
+                return {key_found: filtered}
+        return data
+
+    # Jika data langsung list
+    elif isinstance(data, list):
+        filtered = []
+        for item in data:
+            if isinstance(item, dict):
+                match = any(
+                    query in str(item.get(f, "")).lower()
+                    for f in search_fields
+                    if item.get(f) is not None
+                )
+                if match:
+                    filtered.append(item)
+        return filtered
+
+    return data
+
+
 def get_module_actions(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
 ) -> Optional[Any]:
     """
-    Mengambil daftar 'Actions' (Server Actions / Client Actions) dari tabel modules.
+    Mengambil daftar 'Actions' (Server Actions / Client Actions) dari tabel modules dengan search dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="Actions")
+    cache_key = f"module_actions:{module_id}:{search or ''}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_actions = get_module_section_data(db=db, module_id=module_id, section_key="Actions")
+    if raw_actions is None:
+        return None
+
+    filtered = _filter_dict_or_list_by_search(
+        data=raw_actions,
+        search=search,
+        wrapper_key="Action",
+        search_fields=["Name", "Description", "LastModifiedBy"],
+    )
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
 
 
 def get_module_service_api_methods(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
 ) -> Optional[Any]:
     """
-    Mengambil daftar 'ServiceAPIMethods' (Service Actions / API Endpoints) dari tabel modules.
+    Mengambil daftar 'ServiceAPIMethods' (Service Actions / API Endpoints) dengan search dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="ServiceAPIMethods")
+    cache_key = f"module_service_actions:{module_id}:{search or ''}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_methods = get_module_section_data(db=db, module_id=module_id, section_key="ServiceAPIMethods")
+    if raw_methods is None:
+        raw_methods = get_module_section_data(db=db, module_id=module_id, section_key="ServiceActions")
+    if raw_methods is None:
+        return None
+
+    filtered = _filter_dict_or_list_by_search(
+        data=raw_methods,
+        search=search,
+        wrapper_key="ServiceAction",
+        search_fields=["Name", "Description", "LastModifiedBy"],
+    )
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
+
+
+def filter_entities_data(
+    entities_data: Any,
+    search: Optional[str] = None,
+    is_static: Optional[bool] = None,
+) -> Any:
+    """
+    Memfilter entities (baik list maupun dictionary {'Entity': [...]}) berdasarkan:
+    - search: mencocokkan Entity Name, Description, LastModifiedBy, Attribute Name, Attribute DataType, StaticRecord Name, atau StaticRecord values.
+    - is_static: jika True hanya return static entity, jika False hanya return database entity biasa.
+    """
+    if entities_data is None:
+        return None
+
+    # Normalisasi ke list entity items
+    entity_list = []
+    wrapper_key = "Entity"
+    is_wrapped_dict = False
+
+    if isinstance(entities_data, dict):
+        for k, v in entities_data.items():
+            if k.lower() == "entity":
+                wrapper_key = k
+                is_wrapped_dict = True
+                if isinstance(v, list):
+                    entity_list = v
+                elif isinstance(v, dict):
+                    entity_list = [v]
+                break
+        if not is_wrapped_dict:
+            entity_list = [entities_data]
+    elif isinstance(entities_data, list):
+        entity_list = entities_data
+    else:
+        return entities_data
+
+    query = search.strip().lower() if search and search.strip() else None
+
+    filtered_list = []
+    for item in entity_list:
+        if not isinstance(item, dict):
+            continue
+
+        # 1. Filter is_static jika diberikan
+        item_is_static_raw = item.get("IsStaticEntity") or item.get("isStaticEntity") or item.get("IsStatic")
+        item_is_static = item_is_static_raw == "Yes" or item_is_static_raw is True or str(item_is_static_raw).lower() == "true"
+
+        if is_static is not None:
+            if is_static and not item_is_static:
+                continue
+            if not is_static and item_is_static:
+                continue
+
+        # 2. Filter search keyword jika diberikan
+        if query:
+            match = False
+
+            # Cek field entity langsung: Name, Description, LastModifiedBy, Key
+            name_val = str(item.get("Name", "")).lower()
+            desc_val = str(item.get("Description", "")).lower()
+            mod_val = str(item.get("LastModifiedBy", "")).lower()
+            key_val = str(item.get("Key", "")).lower()
+
+            if query in name_val or query in desc_val or query in mod_val or query in key_val:
+                match = True
+
+            # Cek attributes: Name, DataType, Description
+            if not match and "Attributes" in item:
+                attrs = item.get("Attributes", {})
+                attr_list = []
+                if isinstance(attrs, dict):
+                    attr_obj = attrs.get("Attribute", [])
+                    if isinstance(attr_obj, list):
+                        attr_list = attr_obj
+                    elif isinstance(attr_obj, dict):
+                        attr_list = [attr_obj]
+                elif isinstance(attrs, list):
+                    attr_list = attrs
+
+                for a in attr_list:
+                    if isinstance(a, dict):
+                        a_name = str(a.get("Name", "")).lower()
+                        a_dtype = str(a.get("DataType", "")).lower()
+                        a_desc = str(a.get("Description", "")).lower()
+                        if query in a_name or query in a_dtype or query in a_desc:
+                            match = True
+                            break
+
+            # Cek static records: Name, AttributeValues
+            if not match and "StaticRecords" in item:
+                recs = item.get("StaticRecords", {})
+                rec_list = []
+                if isinstance(recs, dict):
+                    rec_obj = recs.get("StaticRecord", [])
+                    if isinstance(rec_obj, list):
+                        rec_list = rec_obj
+                    elif isinstance(rec_obj, dict):
+                        rec_list = [rec_obj]
+                elif isinstance(recs, list):
+                    rec_list = recs
+
+                for r in rec_list:
+                    if isinstance(r, dict):
+                        r_name = str(r.get("Name", "")).lower()
+                        if query in r_name:
+                            match = True
+                            break
+                        # Cek attribute values di static record
+                        attr_vals = r.get("AttributeValues", {})
+                        if isinstance(attr_vals, dict):
+                            val_items = attr_vals.get("StaticRecordAttributeValue", [])
+                            if isinstance(val_items, dict):
+                                val_items = [val_items]
+                            if isinstance(val_items, list):
+                                for v in val_items:
+                                    if isinstance(v, dict) and query in str(v.get("Value", "")).lower():
+                                        match = True
+                                        break
+                        if match:
+                            break
+
+            if not match:
+                continue
+
+        filtered_list.append(item)
+
+    if is_wrapped_dict:
+        return {wrapper_key: filtered_list}
+    return filtered_list
 
 
 def get_module_entities(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
+    is_static: Optional[bool] = None,
 ) -> Optional[Any]:
     """
-    Mengambil data 'Entities' (Database Entities, Attributes, Static Records) dari tabel modules.
+    Mengambil data 'Entities' (Database Entities, Attributes, Static Records) dengan search, filter is_static, dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="Entities")
+    cache_key = f"module_entities:{module_id}:{search or ''}:{is_static}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_entities = get_module_section_data(db=db, module_id=module_id, section_key="Entities")
+    if raw_entities is None:
+        return None
+
+    filtered = filter_entities_data(
+        entities_data=raw_entities,
+        search=search,
+        is_static=is_static,
+    )
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
+
+
+def get_application_entities(
+    db: Session,
+    application_id: uuid.UUID,
+    search: Optional[str] = None,
+    is_static: Optional[bool] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Mengambil dan mencari entities di semua modul dalam satu aplikasi dengan caching.
+    """
+    cache_key = f"app_entities:{application_id}:{search or ''}:{is_static}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    modules = get_modules_by_application_id(db=db, application_id=application_id)
+    result = []
+
+    for mod in modules:
+        entities = get_module_entities(
+            db=db,
+            module_id=mod.id,
+            search=search,
+            is_static=is_static,
+        )
+        if entities is not None:
+            ent_list = []
+            if isinstance(entities, dict):
+                for k, v in entities.items():
+                    if k.lower() == "entity":
+                        ent_list = v if isinstance(v, list) else [v]
+                        break
+            elif isinstance(entities, list):
+                ent_list = entities
+
+            if ent_list:
+                result.append({
+                    "module_id": str(mod.id),
+                    "module_name": mod.name,
+                    "suffix": mod.suffix,
+                    "total_entities": len(ent_list),
+                    "entities": ent_list,
+                })
+
+    cache.memory_cache.set(cache_key, result)
+    return result
 
 
 def get_module_structures(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
 ) -> Optional[Any]:
     """
-    Mengambil data 'Structures' (Data Structures & DTOs) dari tabel modules.
+    Mengambil data 'Structures' (Data Structures & DTOs) dengan search dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="Structures")
+    cache_key = f"module_structures:{module_id}:{search or ''}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_structures = get_module_section_data(db=db, module_id=module_id, section_key="Structures")
+    if raw_structures is None:
+        return None
+
+    filtered = _filter_dict_or_list_by_search(
+        data=raw_structures,
+        search=search,
+        wrapper_key="Structure",
+        search_fields=["Name", "LastModifiedBy", "Description"],
+    )
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
 
 
 def get_module_site_properties(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
 ) -> Optional[Any]:
     """
-    Mengambil data 'SiteProperties' (Site Properties / Configurations) dari tabel modules.
+    Mengambil data 'SiteProperties' (Site Properties / Configurations) dengan search dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="SiteProperties")
+    cache_key = f"module_site_properties:{module_id}:{search or ''}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_props = get_module_section_data(db=db, module_id=module_id, section_key="SiteProperties")
+    if raw_props is None:
+        return None
+
+    filtered = _filter_dict_or_list_by_search(
+        data=raw_props,
+        search=search,
+        wrapper_key="SiteProperty",
+        search_fields=["Name", "Description", "DataType"],
+    )
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
 
 
 def get_module_system_roles(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
 ) -> Optional[Any]:
     """
-    Mengambil data 'SystemRoles' (Role dan Permission) dari tabel modules.
+    Mengambil data 'SystemRoles' (Role dan Permission) dengan search dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="SystemRoles")
+    cache_key = f"module_system_roles:{module_id}:{search or ''}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_roles = get_module_section_data(db=db, module_id=module_id, section_key="SystemRoles")
+    if raw_roles is None:
+        return None
+
+    filtered = _filter_dict_or_list_by_search(
+        data=raw_roles,
+        search=search,
+        wrapper_key="SystemRole",
+        search_fields=["Name", "Description"],
+    )
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
 
 
 def get_module_exceptions(
     db: Session,
     module_id: uuid.UUID,
+    search: Optional[str] = None,
 ) -> Optional[Any]:
     """
-    Mengambil data 'Exceptions' (User Defined Exceptions) dari tabel modules.
+    Mengambil data 'Exceptions' (User Defined Exceptions) dengan search dan cache.
     """
-    return get_module_section_data(db=db, module_id=module_id, section_key="Exceptions")
+    cache_key = f"module_exceptions:{module_id}:{search or ''}"
+    cached = cache.memory_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_exceptions = get_module_section_data(db=db, module_id=module_id, section_key="Exceptions")
+    if raw_exceptions is None:
+        return None
+
+    if not search or not search.strip():
+        cache.memory_cache.set(cache_key, raw_exceptions)
+        return raw_exceptions
+
+    query = search.strip().lower()
+    filtered = {}
+    if isinstance(raw_exceptions, dict):
+        for cat, items in raw_exceptions.items():
+            if isinstance(items, dict):
+                items = [items]
+            if isinstance(items, list):
+                matched = [
+                    item for item in items
+                    if isinstance(item, dict) and (
+                        query in str(item.get("Name", "")).lower() or
+                        query in cat.lower() or
+                        query in str(item.get("LastModifiedBy", "")).lower()
+                    )
+                ]
+                if matched:
+                    filtered[cat] = matched
+    else:
+        filtered = raw_exceptions
+
+    cache.memory_cache.set(cache_key, filtered)
+    return filtered
 
 
 

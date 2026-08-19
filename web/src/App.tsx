@@ -6,6 +6,7 @@ import { ProjectsView } from './components/ProjectsView';
 import { ApplicationsView } from './components/ApplicationsView';
 import { ModulesView } from './components/ModulesView';
 import { ModuleDataViewer } from './components/ModuleDataViewer';
+import { AgentChatView } from './components/AgentChatView';
 import { api } from './services/api';
 import type { 
   ProjectSummary, 
@@ -14,7 +15,8 @@ import type {
   ProjectCreate 
 } from './types/api';
 
-type ViewMode = 'projects' | 'applications' | 'modules' | 'module-detail';
+type ViewMode = 'projects' | 'applications' | 'modules' | 'module-detail' | 'agent-chat';
+
 
 export const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>('projects');
@@ -104,6 +106,10 @@ export const App: React.FC = () => {
     loadProjects();
   };
 
+  const handleGoToAgent = () => {
+    setView('agent-chat');
+  };
+
   const handleGoToApplications = () => {
     if (selectedProject) {
       setSelectedApp(null);
@@ -181,81 +187,95 @@ export const App: React.FC = () => {
       <Toaster position="top-right" richColors closeButton />
 
       {/* 1. Global Navigation Bar */}
-      <Header onGoHome={handleGoToProjects} />
+      <Header 
+        currentView={view}
+        onGoHome={handleGoToProjects} 
+        onGoToAgent={handleGoToAgent}
+      />
 
       {/* Main Container */}
-      <main className="flex-grow max-w-container w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        
-        {/* 2. Hierarchical Breadcrumbs Navigation */}
-        <Breadcrumbs
-          currentProject={selectedProject}
-          currentApp={selectedApp}
-          currentModule={selectedModule}
-          onNavigateToProjects={handleGoToProjects}
-          onNavigateToApplications={handleGoToApplications}
-          onNavigateToModules={handleGoToModules}
-        />
-
-        {/* 3. Dynamic Page View */}
-        {view === 'projects' && (
-          <ProjectsView
-            projects={projects}
-            loading={loading}
-            onSelectProject={handleSelectProject}
-            onCreateProject={handleCreateProject}
-            onDeleteProject={handleDeleteProject}
-            onRefresh={loadProjects}
+      {view === 'agent-chat' ? (
+        <main className="flex-grow w-full">
+          <AgentChatView
+            initialProject={selectedProject}
+            initialApp={selectedApp}
+            initialModule={selectedModule}
           />
-        )}
-
-        {view === 'applications' && selectedProject && (
-          <ApplicationsView
-            project={selectedProject}
-            applications={applications}
-            loading={loading}
-            onBackToProjects={handleGoToProjects}
-            onSelectApplication={handleSelectApp}
-            onUploadOap={handleUploadOap}
-            onRefresh={() => loadApplications(selectedProject.id)}
+        </main>
+      ) : (
+        <main className="flex-grow max-w-container w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+          {/* 2. Hierarchical Breadcrumbs Navigation */}
+          <Breadcrumbs
+            currentProject={selectedProject}
+            currentApp={selectedApp}
+            currentModule={selectedModule}
+            onNavigateToProjects={handleGoToProjects}
+            onNavigateToApplications={handleGoToApplications}
+            onNavigateToModules={handleGoToModules}
           />
-        )}
 
-        {view === 'modules' && selectedApp && (
-          <ModulesView
-            project={selectedProject}
-            application={selectedApp}
-            modules={modules}
-            loading={loading}
-            onBackToApps={handleGoToApplications}
-            onSelectModule={handleSelectModule}
-            onUploadOml={handleUploadOml}
-            onRefresh={() => loadModules(selectedApp.id)}
-          />
-        )}
+          {/* 3. Dynamic Page View */}
+          {view === 'projects' && (
+            <ProjectsView
+              projects={projects}
+              loading={loading}
+              onSelectProject={handleSelectProject}
+              onCreateProject={handleCreateProject}
+              onDeleteProject={handleDeleteProject}
+              onRefresh={loadProjects}
+            />
+          )}
 
-        {view === 'module-detail' && selectedModule && (
-          <ModuleDataViewer
-            module={selectedModule}
-            onBackToModules={handleGoToModules}
-          />
-        )}
+          {view === 'applications' && selectedProject && (
+            <ApplicationsView
+              project={selectedProject}
+              applications={applications}
+              loading={loading}
+              onBackToProjects={handleGoToProjects}
+              onSelectApplication={handleSelectApp}
+              onUploadOap={handleUploadOap}
+              onRefresh={() => loadApplications(selectedProject.id)}
+            />
+          )}
 
-      </main>
+          {view === 'modules' && selectedApp && (
+            <ModulesView
+              project={selectedProject}
+              application={selectedApp}
+              modules={modules}
+              loading={loading}
+              onBackToApps={handleGoToApplications}
+              onSelectModule={handleSelectModule}
+              onUploadOml={handleUploadOml}
+              onRefresh={() => loadModules(selectedApp.id)}
+            />
+          )}
 
-      {/* Global Footer */}
-      <footer className="bg-surface border-t border-outline py-6 text-xs text-gray-500 mt-auto">
-        <div className="max-w-container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>© {new Date().getFullYear()} OutSystems Documentation & Architecture Generator.</p>
-          <div className="flex items-center gap-4 text-gray-400">
-            <span>FastAPI Backend Connected</span>
-            <span>•</span>
-            <span>REST API v1</span>
+          {view === 'module-detail' && selectedModule && (
+            <ModuleDataViewer
+              module={selectedModule}
+              onBackToModules={handleGoToModules}
+            />
+          )}
+        </main>
+      )}
+
+      {/* Global Footer (hanya di page non-chat agar chat full viewport) */}
+      {view !== 'agent-chat' && (
+        <footer className="bg-surface border-t border-outline py-6 text-xs text-gray-500 mt-auto">
+          <div className="max-w-container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p>© {new Date().getFullYear()} OutSystems Documentation & Architecture Generator.</p>
+            <div className="flex items-center gap-4 text-gray-400">
+              <span>FastAPI Backend Connected</span>
+              <span>•</span>
+              <span>REST API v1</span>
+            </div>
           </div>
-        </div>
-      </footer>
-
+        </footer>
+      )}
     </div>
   );
 };
 
 export default App;
+

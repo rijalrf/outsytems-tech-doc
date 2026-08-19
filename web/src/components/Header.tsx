@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Layers, RefreshCw, FolderKanban } from 'lucide-react';
+import { Layers, RefreshCw, FolderKanban, Sparkles } from 'lucide-react';
 import { api } from '../services/api';
 
+
 interface HeaderProps {
+  currentView?: string;
   onGoHome: () => void;
+  onGoToAgent: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onGoHome }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onGoHome, onGoToAgent }) => {
   const [apiOnline, setApiOnline] = useState<boolean | null>(null);
   const [checking, setChecking] = useState<boolean>(false);
 
@@ -48,14 +51,42 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome }) => {
             </div>
           </button>
 
-          {/* Center / Right Status & Actions */}
-          <div className="flex items-center gap-3">
+          {/* Center / Right Navigation & Status */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
             
+            {/* View Switcher: Projects Explorer vs AI Doc Assistant */}
+            <div className="flex items-center bg-gray-100 p-1 rounded-pill border border-outline">
+              <button
+                onClick={onGoHome}
+                className={`px-3 py-1.5 rounded-pill text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  currentView !== 'agent-chat'
+                    ? 'bg-white text-primary shadow-sm'
+                    : 'text-gray-600 hover:text-primary'
+                }`}
+              >
+                <FolderKanban className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Projects</span>
+              </button>
+
+              <button
+                onClick={onGoToAgent}
+                className={`px-3 py-1.5 rounded-pill text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  currentView === 'agent-chat'
+                    ? 'bg-gradient-to-r from-primary to-blue-600 text-white shadow-md'
+                    : 'text-gray-600 hover:text-primary'
+                }`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${currentView === 'agent-chat' ? 'text-yellow-300' : 'text-primary'}`} />
+                <span>AI Assistant</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-yellow-400 text-gray-900 font-black ml-0.5">NEW</span>
+              </button>
+            </div>
+
             {/* Backend Health Status Badge */}
             <div 
               onClick={checkStatus}
               title="Click to re-check Backend API Status"
-              className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-pill border text-xs font-bold transition-all ${
+              className={`cursor-pointer hidden md:flex items-center gap-2 px-3 py-1.5 rounded-pill border text-xs font-bold transition-all ${
                 apiOnline === true 
                   ? 'bg-success-soft border-emerald-200 text-success' 
                   : apiOnline === false 
@@ -66,18 +97,9 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome }) => {
               <span className={`w-2 h-2 rounded-full ${
                 apiOnline === true ? 'bg-success animate-pulse' : apiOnline === false ? 'bg-rose-500' : 'bg-gray-400'
               }`} />
-              <span>{apiOnline === true ? 'Backend API Online' : apiOnline === false ? 'API Offline' : 'Connecting...'}</span>
+              <span>{apiOnline === true ? 'API Online' : apiOnline === false ? 'API Offline' : 'Connecting...'}</span>
               <RefreshCw className={`w-3 h-3 ml-0.5 ${checking ? 'animate-spin' : ''}`} />
             </div>
-
-            {/* Quick Home / Projects Button */}
-            <button
-              onClick={onGoHome}
-              className="h-9 px-3.5 rounded-pill bg-surface hover:bg-surface-soft text-gray-700 hover:text-primary border border-outline text-xs font-bold flex items-center gap-1.5 transition-colors"
-            >
-              <FolderKanban className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">All Projects</span>
-            </button>
 
           </div>
 
@@ -86,3 +108,4 @@ export const Header: React.FC<HeaderProps> = ({ onGoHome }) => {
     </header>
   );
 };
+

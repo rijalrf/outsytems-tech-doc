@@ -1,6 +1,6 @@
 import uuid
-from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from core import database
@@ -161,9 +161,10 @@ def get_module_project_info_endpoint(
 )
 def get_module_actions_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter action berdasarkan kata kunci nama, deskripsi, atau modified by"),
     db: Session = Depends(database.get_db),
 ):
-    actions = module_service.get_module_actions(db=db, module_id=module_id)
+    actions = module_service.get_module_actions(db=db, module_id=module_id, search=search)
     if actions is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -178,9 +179,10 @@ def get_module_actions_endpoint(
 )
 def get_module_service_api_methods_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter service action berdasarkan kata kunci"),
     db: Session = Depends(database.get_db),
 ):
-    methods = module_service.get_module_service_api_methods(db=db, module_id=module_id)
+    methods = module_service.get_module_service_api_methods(db=db, module_id=module_id, search=search)
     if methods is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -190,14 +192,47 @@ def get_module_service_api_methods_endpoint(
 
 
 @router.get(
+    "/applications/{application_id}/entities",
+    summary="Cari & Ambil Khusus 'Entities' dari Seluruh Modul di Aplikasi",
+    description="Mengambil semua entitas (database entities dan/atau static entities) di seluruh modul dalam satu aplikasi, lengkap dengan filter search dan filter is_static serta in-memory caching.",
+)
+def get_application_entities_endpoint(
+    application_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter entity berdasarkan nama tabel, atribut kolom, record, atau deskripsi"),
+    is_static: Optional[bool] = Query(None, description="Opsional: Filter entity biasa (false) atau static entity (true)"),
+    db: Session = Depends(database.get_db),
+):
+    app = application_service.get_application_by_id(db=db, application_id=application_id)
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Aplikasi dengan ID '{application_id}' tidak ditemukan.",
+        )
+    entities = module_service.get_application_entities(
+        db=db,
+        application_id=application_id,
+        search=search,
+        is_static=is_static,
+    )
+    return entities
+
+
+@router.get(
     "/modules/{module_id}/entities",
     summary="Ambil Khusus 'Entities' dari Modul Tertentu",
 )
 def get_module_entities_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter entity berdasarkan nama tabel, atribut kolom, record, atau deskripsi"),
+    is_static: Optional[bool] = Query(None, description="Opsional: Filter entity biasa (false) atau static entity (true)"),
     db: Session = Depends(database.get_db),
 ):
-    entities = module_service.get_module_entities(db=db, module_id=module_id)
+    entities = module_service.get_module_entities(
+        db=db,
+        module_id=module_id,
+        search=search,
+        is_static=is_static,
+    )
     if entities is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -212,9 +247,10 @@ def get_module_entities_endpoint(
 )
 def get_module_structures_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter structure berdasarkan nama atau atribut"),
     db: Session = Depends(database.get_db),
 ):
-    structures = module_service.get_module_structures(db=db, module_id=module_id)
+    structures = module_service.get_module_structures(db=db, module_id=module_id, search=search)
     if structures is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -229,9 +265,10 @@ def get_module_structures_endpoint(
 )
 def get_module_site_properties_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter site property berdasarkan nama atau deskripsi"),
     db: Session = Depends(database.get_db),
 ):
-    props = module_service.get_module_site_properties(db=db, module_id=module_id)
+    props = module_service.get_module_site_properties(db=db, module_id=module_id, search=search)
     if props is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -246,9 +283,10 @@ def get_module_site_properties_endpoint(
 )
 def get_module_system_roles_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter system role berdasarkan nama atau deskripsi"),
     db: Session = Depends(database.get_db),
 ):
-    roles = module_service.get_module_system_roles(db=db, module_id=module_id)
+    roles = module_service.get_module_system_roles(db=db, module_id=module_id, search=search)
     if roles is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -263,9 +301,10 @@ def get_module_system_roles_endpoint(
 )
 def get_module_exceptions_endpoint(
     module_id: uuid.UUID,
+    search: Optional[str] = Query(None, description="Opsional: Filter exception berdasarkan nama atau kategori"),
     db: Session = Depends(database.get_db),
 ):
-    exceptions = module_service.get_module_exceptions(db=db, module_id=module_id)
+    exceptions = module_service.get_module_exceptions(db=db, module_id=module_id, search=search)
     if exceptions is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

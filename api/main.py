@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core import config
-from routers import application_router, module_router, project_router
+from routers import agentic_router, application_router, module_router, project_router
 
 app = FastAPI(
     title=config.settings.app_name,
@@ -26,6 +26,8 @@ app.add_middleware(
 app.include_router(project_router.router, prefix="/api/v1", tags=["Projects"])
 app.include_router(module_router.router, prefix="/api/v1/oml", tags=["OML Parser"])
 app.include_router(application_router.router, prefix="/api/v1", tags=["Applications & Modules"])
+app.include_router(agentic_router.router, prefix="/api/v1/agent", tags=["Agentic AI Assistant"])
+
 
 
 

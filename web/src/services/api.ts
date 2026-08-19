@@ -5,8 +5,12 @@ import type {
   ApplicationSummary, 
   ModuleSummary, 
   ModuleDetail, 
-  BatchProcessResponse 
+  BatchProcessResponse,
+  AgentChatRequest,
+  AgentChatResponse,
+  AgentStatus
 } from '../types/api';
+
 
 const BASE_URL = '/api/v1';
 
@@ -192,6 +196,26 @@ export const api = {
     return res.json();
   },
 
+  async getModuleEntities(moduleId: string, search?: string, isStatic?: boolean): Promise<any> {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (isStatic !== undefined) params.append('is_static', String(isStatic));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${BASE_URL}/modules/${moduleId}/entities${qs}`);
+    if (!res.ok) throw new Error('Gagal mengambil data entities modul');
+    return res.json();
+  },
+
+  async getApplicationEntities(appId: string, search?: string, isStatic?: boolean): Promise<any[]> {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (isStatic !== undefined) params.append('is_static', String(isStatic));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${BASE_URL}/applications/${appId}/entities${qs}`);
+    if (!res.ok) throw new Error('Gagal mengambil entities aplikasi');
+    return res.json();
+  },
+
   // Upload & Parse OAP / OML File
   async uploadFile(file: File, projectId?: string): Promise<BatchProcessResponse> {
     const formData = new FormData();
@@ -213,4 +237,33 @@ export const api = {
 
     return res.json();
   },
+
+  // ==========================================
+  // AGENTIC AI ASSISTANT
+  // ==========================================
+  async sendAgentChat(request: AgentChatRequest): Promise<AgentChatResponse> {
+    const res = await fetch(`${BASE_URL}/agent/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Gagal memproses percakapan dengan AI');
+    }
+    return res.json();
+  },
+
+  async getAgentStatus(): Promise<AgentStatus> {
+    const res = await fetch(`${BASE_URL}/agent/status`);
+    if (!res.ok) throw new Error('Gagal memeriksa status AI Agent');
+    return res.json();
+  },
+
+  async getAgentTools(): Promise<any[]> {
+    const res = await fetch(`${BASE_URL}/agent/tools`);
+    if (!res.ok) throw new Error('Gagal mengambil daftar tools AI');
+    return res.json();
+  },
 };
+

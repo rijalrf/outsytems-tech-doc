@@ -55,3 +55,58 @@ export interface BatchProcessResponse {
     data: Record<string, any> | null;
   }[];
 }
+
+// ==========================================
+// AGENTIC AI CHAT INTERFACES
+// ==========================================
+
+export interface AgentChatMessage {
+  id?: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  tool_calls?: ToolCallTrace[];
+  timestamp?: string;
+  isError?: boolean;
+}
+
+export interface ChatContextInfo {
+  project_id?: string;
+  application_id?: string;
+  application_name?: string;
+  module_id?: string;
+  module_name?: string;
+}
+
+export interface ToolCallTrace {
+  id?: string;
+  tool_name: string;
+  arguments: Record<string, any>;
+  result_preview?: string;
+}
+
+export interface AgentChatRequest {
+  messages: {
+    role: string;
+    content: string;
+  }[];
+  context?: ChatContextInfo;
+  model?: string;
+  temperature?: number;
+}
+
+export interface AgentChatResponse {
+  role: string;
+  content: string;
+  tool_calls: ToolCallTrace[];
+  model: string;
+  usage?: Record<string, any>;
+  iterations: number;
+}
+
+export interface AgentStatus {
+  is_configured: boolean;
+  base_url: string;
+  active_model: string;
+  total_tools_available: number;
+}
+

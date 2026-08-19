@@ -29,7 +29,13 @@ class Settings:
     read_oml_base_url: str = _get_required_env("READ_OML_BASE_URL")
     read_oml_api_key: str = os.getenv("X_API_KEY", os.getenv("X-API-KEY", os.getenv("READ_OML_API_KEY", "")))
     database_url: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/outsystems_doc")
+    # OpenAI-Compatible Configuration
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
+    openai_base_url: str = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    openai_temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0.2"))
 
 
 settings = Settings()
+
 
