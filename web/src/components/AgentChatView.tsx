@@ -15,6 +15,7 @@ import {
   Copy, 
   Check, 
   RefreshCw, 
+  RotateCcw,
   FileText,
   Download,
   Eye,
@@ -237,20 +238,108 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // Function to scroll preview container to a specific section
+  const scrollToSection = useCallback((targetSection: string) => {
+    setTimeout(() => {
+      if (!previewContainerRef.current) return;
+      const clean = targetSection.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const headings = previewContainerRef.current.querySelectorAll('h2, h3, h4');
+      for (const h of headings) {
+        const text = (h.textContent || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (text.includes(clean) || clean.includes(text)) {
+          h.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          h.classList.add('bg-yellow-200', 'transition-colors', 'duration-1000');
+          setTimeout(() => h.classList.remove('bg-yellow-200'), 2500);
+          break;
+        }
+      }
+    }, 150);
+  }, []);
+
   // Helper to replace placeholder or update document section
   const applyDocumentPatch = useCallback((sectionOrPlaceholder: string, newContent: string) => {
     let wasUpdated = false;
+    const cleanContent = newContent
+      .replace(/^(?:Tentu|Baik|Berikut|Berikut adalah|Ini adalah|Halo)[^\n]*\n+/i, '')
+      .trim();
+
     setDocumentMarkdown((prevDoc) => {
+      let doc = prevDoc;
+
       // 1. Coba cari exact placeholder match
-      if (prevDoc.includes(sectionOrPlaceholder)) {
+      if (doc.includes(sectionOrPlaceholder)) {
         wasUpdated = true;
-        return prevDoc.replaceAll(sectionOrPlaceholder, newContent);
+        return doc.replaceAll(sectionOrPlaceholder, cleanContent);
       }
 
-      // 2. Normalisasi keyword section
-      const cleanTarget = sectionOrPlaceholder.replace(/^#+\s*/, '').trim();
+      // 2. Penanganan khusus Section 1.2 (Background & Objectives)
+      if (
+        sectionOrPlaceholder.includes('1.2') ||
+        sectionOrPlaceholder.toLowerCase().includes('background') ||
+        sectionOrPlaceholder.toLowerCase().includes('objective')
+      ) {
+        // Coba ekstrak background dan objectives secara terpisah jika ada
+        const bgMatch = cleanContent.match(/\*\*Background\*\*([\s\S]*?)(?=\*\*Objectives\*\*|\*\*In-Scope Features\*\*|$)/i);
+        const objMatch = cleanContent.match(/\*\*Objectives\*\*([\s\S]*?)(?=\*\*In-Scope Features\*\*|$)/i);
 
-      // 3. Coba cari berdasarkan Section Header
+        if (bgMatch && bgMatch[1].trim()) {
+          const bgText = bgMatch[1].trim();
+          doc = doc.replace(
+            /\[AI Generated \| Function: get_project_detail\(project_id\) -> background[^\]]*\]/g,
+            bgText
+          );
+          wasUpdated = true;
+        }
+        if (objMatch && objMatch[1].trim()) {
+          const objText = objMatch[1].trim();
+          doc = doc.replace(
+            /\[AI Generated \| Function: get_project_detail\(project_id\) -> objectives[^\]]*\]/g,
+            objText
+          );
+          wasUpdated = true;
+        }
+
+        // Jika tidak match pattern terpisah tapi ada placeholder background di template
+        if (!bgMatch && !objMatch) {
+          if (doc.includes('get_project_detail(project_id) -> background')) {
+            doc = doc.replace(
+              /\[AI Generated \| Function: get_project_detail\(project_id\) -> background[^\]]*\]/g,
+              cleanContent
+            );
+            wasUpdated = true;
+            return doc;
+          }
+        } else {
+          return doc;
+        }
+      }
+
+      // 3. Penanganan khusus Section 4.1 (ERD)
+      if (sectionOrPlaceholder.includes('4.1') || sectionOrPlaceholder.toLowerCase().includes('erd')) {
+        const mermaidMatch = cleanContent.match(/```mermaid[\s\S]*?```/);
+        if (mermaidMatch) {
+          const erdPlaceholder = /```mermaid\nerDiagram[\s\S]*?```/;
+          if (erdPlaceholder.test(doc)) {
+            wasUpdated = true;
+            return doc.replace(erdPlaceholder, mermaidMatch[0]);
+          }
+        }
+      }
+
+      // 4. Penanganan khusus Section 4.2 (Database Information & Entities)
+      if (sectionOrPlaceholder.includes('4.2') || sectionOrPlaceholder.toLowerCase().includes('database information')) {
+        const sec42Idx = doc.indexOf('### 4.2 Database Information & Entities');
+        if (sec42Idx !== -1) {
+          const nextSecIdx = doc.indexOf('### 4.3 Timers and Background Processes', sec42Idx);
+          if (nextSecIdx !== -1) {
+            wasUpdated = true;
+            return doc.slice(0, sec42Idx) + '### 4.2 Database Information & Entities\n\n' + cleanContent + '\n\n' + doc.slice(nextSecIdx);
+          }
+        }
+      }
+
+      // 5. Normalisasi keyword section & pencarian batas section umum
+      const cleanTarget = sectionOrPlaceholder.replace(/^#+\s*/, '').trim();
       const headerPatterns = [
         `### ${cleanTarget}`,
         `## ${cleanTarget}`,
@@ -259,46 +348,48 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
       ];
 
       for (const pattern of headerPatterns) {
-        const idx = prevDoc.indexOf(pattern);
+        const idx = doc.indexOf(pattern);
         if (idx !== -1) {
           wasUpdated = true;
-          // Cari batas section berikutnya
-          const afterHeader = prevDoc.slice(idx + pattern.length);
-          const nextHeaderMatch = afterHeader.search(/\n##+ /);
+          const afterHeader = doc.slice(idx + pattern.length);
+          const nextHeaderMatch = afterHeader.search(/\n(?:##+|---)\s+/);
           if (nextHeaderMatch !== -1) {
             const endIdx = idx + pattern.length + nextHeaderMatch;
-            return prevDoc.slice(0, idx + pattern.length) + '\n\n' + newContent + '\n' + prevDoc.slice(endIdx);
+            return doc.slice(0, idx + pattern.length) + '\n\n' + cleanContent + '\n' + doc.slice(endIdx);
           } else {
-            return prevDoc.slice(0, idx + pattern.length) + '\n\n' + newContent;
+            return doc.slice(0, idx + pattern.length) + '\n\n' + cleanContent;
           }
         }
       }
 
-      // 4. Fallback: jika newContent mengandung header markdown sendiri (misal ### 1.2 ...), coba match header di dalam newContent
-      const innerHeaderMatch = newContent.match(/^(##+ [^\n]+)/m);
+      // 6. Fallback: jika cleanContent mengandung heading sendiri
+      const innerHeaderMatch = cleanContent.match(/^(##+ [^\n]+)/m);
       if (innerHeaderMatch) {
         const foundHeader = innerHeaderMatch[1];
-        const hIdx = prevDoc.indexOf(foundHeader);
+        const hIdx = doc.indexOf(foundHeader);
         if (hIdx !== -1) {
           wasUpdated = true;
-          const afterHeader = prevDoc.slice(hIdx);
-          const nextHeaderMatch = afterHeader.slice(foundHeader.length).search(/\n##+ /);
+          const afterHeader = doc.slice(hIdx);
+          const nextHeaderMatch = afterHeader.slice(foundHeader.length).search(/\n(?:##+|---)\s+/);
           if (nextHeaderMatch !== -1) {
             const endIdx = hIdx + foundHeader.length + nextHeaderMatch;
-            return prevDoc.slice(0, hIdx) + newContent + '\n' + prevDoc.slice(endIdx);
+            return doc.slice(0, hIdx) + cleanContent + '\n' + doc.slice(endIdx);
           } else {
-            return prevDoc.slice(0, hIdx) + newContent;
+            return doc.slice(0, hIdx) + cleanContent;
           }
         }
       }
 
-      return prevDoc;
+      return doc;
     });
 
     if (wasUpdated) {
-      toast.success(`Dokumen FSD pada panel kanan berhasil diperbarui.`);
+      toast.success(`Dokumen berhasil disisipkan ke: ${sectionOrPlaceholder}`);
+      scrollToSection(sectionOrPlaceholder);
+    } else {
+      toast.info(`Konten disisipkan ke dokumen.`);
     }
-  }, []);
+  }, [scrollToSection]);
 
   // Send Message to AI Assistant
   const handleSendMessage = async (customPrompt?: string) => {
@@ -1341,58 +1432,63 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                 {/* Reset Document to Template */}
                 <button
                   type="button"
-                  onClick={handleResetDocument}
-                  className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-600 hover:text-rose-600 transition-colors"
-                  title="Reset dokumen ke template awal"
+                  onClick={() => {
+                    if (window.confirm('Apakah Anda yakin ingin mereset seluruh isi dokumen kembali ke template awal? Perubahan yang belum diexport akan hilang.')) {
+                      handleResetDocument();
+                    }
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-colors flex items-center gap-1 text-[11px] font-medium"
+                  title="Reset dokumen ke template semula (Hapus editan)"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden xl:inline text-[10px]">Reset Template</span>
                 </button>
               </div>
             </div>
 
             {/* Quick Document Navigation & Legend */}
             <div className="px-4 py-1.5 bg-slate-100/90 border-b border-outline flex items-center justify-between text-[11px] text-slate-600 overflow-x-auto no-scrollbar">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Navigasi Section:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Lompat ke:</span>
                 <button
                   type="button"
-                  onClick={() => handleSendMessage('Isi Section 1 Project Overview pada dokumen')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0"
+                  onClick={() => scrollToSection('1. Project Overview')}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
                 >
                   1. Overview
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSendMessage('Isi Section 2 OutSystems Architecture pada dokumen')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0"
+                  onClick={() => scrollToSection('2. OutSystems Application Architecture')}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
                 >
                   2. Architecture
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSendMessage('Isi Section 3 Integrations & APIs pada dokumen')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0"
+                  onClick={() => scrollToSection('3. Integrations & Interfaces')}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
                 >
                   3. Integrations
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSendMessage('Isi Section 4 Data & Logic Design (ERD & Entities) pada dokumen')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0"
+                  onClick={() => scrollToSection('4. Data & Logic Design')}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
                 >
                   4. Data & Logic
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSendMessage('Isi Section 5 Security & Roles pada dokumen')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0"
+                  onClick={() => scrollToSection('5. Security, Entitlement')}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
                 >
                   5. Security
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSendMessage('Isi Section 6 Deployment pada dokumen')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0"
+                  onClick={() => scrollToSection('6. Deployment')}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
                 >
                   6. Deployment
                 </button>
