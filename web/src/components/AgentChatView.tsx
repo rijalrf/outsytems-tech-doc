@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '../services/api';
 import { MermaidRenderer } from './MermaidRenderer';
+import { DEFAULT_FSD_TEMPLATE } from '../constants/fsdTemplate';
 import type { 
   AgentChatMessage, 
   AgentStatus, 
@@ -145,8 +146,8 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
   const [status, setStatus] = useState<AgentStatus | null>(null);
 
   // Document Markdown State
-  const [rawTemplate, setRawTemplate] = useState<string>('');
-  const [documentMarkdown, setDocumentMarkdown] = useState<string>('');
+  const [rawTemplate, setRawTemplate] = useState<string>(DEFAULT_FSD_TEMPLATE);
+  const [documentMarkdown, setDocumentMarkdown] = useState<string>(DEFAULT_FSD_TEMPLATE);
   const [docLoading, setDocLoading] = useState<boolean>(false);
   const [docCopied, setDocCopied] = useState<boolean>(false);
 
@@ -264,7 +265,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
       .trim();
 
     setDocumentMarkdown((prevDoc) => {
-      let doc = prevDoc;
+      let doc = prevDoc && prevDoc.length > 50 ? prevDoc : DEFAULT_FSD_TEMPLATE;
 
       // 1. Coba cari exact placeholder match
       if (doc.includes(sectionOrPlaceholder)) {
@@ -278,7 +279,6 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
         sectionOrPlaceholder.toLowerCase().includes('background') ||
         sectionOrPlaceholder.toLowerCase().includes('objective')
       ) {
-        // Coba ekstrak background dan objectives secara terpisah jika ada
         const bgMatch = cleanContent.match(/\*\*Background\*\*([\s\S]*?)(?=\*\*Objectives\*\*|\*\*In-Scope Features\*\*|$)/i);
         const objMatch = cleanContent.match(/\*\*Objectives\*\*([\s\S]*?)(?=\*\*In-Scope Features\*\*|$)/i);
 
@@ -299,7 +299,6 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
           wasUpdated = true;
         }
 
-        // Jika tidak match pattern terpisah tapi ada placeholder background di template
         if (!bgMatch && !objMatch) {
           if (doc.includes('get_project_detail(project_id) -> background')) {
             doc = doc.replace(
@@ -353,11 +352,12 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
           wasUpdated = true;
           const afterHeader = doc.slice(idx + pattern.length);
           const nextHeaderMatch = afterHeader.search(/\n(?:##+|---)\s+/);
-          if (nextHeaderMatch !== -1) {
-            const endIdx = idx + pattern.length + nextHeaderMatch;
-            return doc.slice(0, idx + pattern.length) + '\n\n' + cleanContent + '\n' + doc.slice(endIdx);
+          const endIdx = nextHeaderMatch !== -1 ? idx + pattern.length + nextHeaderMatch : doc.length;
+          
+          if (cleanContent.startsWith('#') || cleanContent.toLowerCase().includes(pattern.toLowerCase())) {
+            return doc.slice(0, idx) + cleanContent + '\n\n' + doc.slice(endIdx);
           } else {
-            return doc.slice(0, idx + pattern.length) + '\n\n' + cleanContent;
+            return doc.slice(0, idx + pattern.length) + '\n\n' + cleanContent + '\n\n' + doc.slice(endIdx);
           }
         }
       }
@@ -371,16 +371,14 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
           wasUpdated = true;
           const afterHeader = doc.slice(hIdx);
           const nextHeaderMatch = afterHeader.slice(foundHeader.length).search(/\n(?:##+|---)\s+/);
-          if (nextHeaderMatch !== -1) {
-            const endIdx = hIdx + foundHeader.length + nextHeaderMatch;
-            return doc.slice(0, hIdx) + cleanContent + '\n' + doc.slice(endIdx);
-          } else {
-            return doc.slice(0, hIdx) + cleanContent;
-          }
+          const endIdx = nextHeaderMatch !== -1 ? hIdx + foundHeader.length + nextHeaderMatch : doc.length;
+          return doc.slice(0, hIdx) + cleanContent + '\n\n' + doc.slice(endIdx);
         }
       }
 
-      return doc;
+      // 7. Fallback Terakhir: Jika section sama sekali baru, sisipkan di akhir dokumen
+      wasUpdated = true;
+      return doc + `\n\n### ${cleanTarget}\n\n` + cleanContent;
     });
 
     if (wasUpdated) {
