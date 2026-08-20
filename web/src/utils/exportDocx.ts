@@ -189,10 +189,25 @@ export async function exportToDocx(
 
   // FSD Outline sections
   for (const sec of FSD_OUTLINE) {
+    const hasChildren = FSD_OUTLINE.some((item) => item.parentId === sec.id);
+
     if (sec.level === 'parent') {
       children.push(
         new Paragraph({ text: sec.heading, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } })
       );
+      if (!hasChildren) {
+        const content = sectionContents[sec.heading];
+        if (content) {
+          children.push(...markdownToDocxBlocks(content));
+        } else {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: '[Belum diisi]', italics: true, color: 'CBD5E1', size: 20 })],
+              spacing: { after: 80 },
+            })
+          );
+        }
+      }
     } else {
       children.push(
         new Paragraph({ text: sec.heading, heading: HeadingLevel.HEADING_2, spacing: { before: 240, after: 80 } })

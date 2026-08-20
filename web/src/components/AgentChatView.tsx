@@ -123,16 +123,17 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
   // Message Insertion States
   const [selectedDocSection, setSelectedDocSection] = useState<string | null>(null);
   const [insertedMsgIds, setInsertedMsgIds] = useState<Record<string, boolean>>({});
+  const [draftSavedTime, setDraftSavedTime] = useState<string | null>(null);
 
   // Chat State
-  const [messages, setMessages] = useState<AgentChatMessage[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: `👋 **Halo! Saya OutSystems Technical Specification & FSD Assistant.**\n\nSaya siap membantu Anda menyusun **Dokumen Spesifikasi Teknis (FSD)** secara komprehensif merujuk pada template standar di panel sebelah kanan.\n\nSetiap jawaban yang saya berikan dapat Anda tinjau terlebih dahulu dan dimasukkan ke dokumen menggunakan tombol **"📥 Sisipkan ke Dokumen"** pada bubble respon.\n\nContoh yang dapat Anda tanyakan:\n- *"Isi section 1.1 Project General Information dan 1.2 Description & Scope"* \n- *"Buat diagram ERD dan jelaskan database entities untuk modul Core Service"* \n- *"Lengkapi seluruh dokumen spesifikasi teknis"*`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+  const defaultWelcomeMessage: AgentChatMessage = {
+    id: 'welcome',
+    role: 'assistant',
+    content: `👋 **Halo! Saya OutSystems Technical Specification & FSD Assistant.**\n\nSaya siap membantu Anda menyusun **Dokumen Spesifikasi Teknis (FSD)** secara komprehensif merujuk pada template standar di panel sebelah kanan.\n\nSetiap jawaban yang saya berikan dapat Anda tinjau terlebih dahulu dan dimasukkan ke dokumen menggunakan tombol **"📥 Sisipkan ke Dokumen"** pada bubble respon.\n\nContoh yang dapat Anda tanyakan:\n- *"Isi section 1.1 Project General Information dan 1.2 Description & Scope"* \n- *"Buat diagram ERD dan jelaskan database entities untuk modul Core Service"* \n- *"Lengkapi seluruh dokumen spesifikasi teknis"*`,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+
+  const [messages, setMessages] = useState<AgentChatMessage[]>([defaultWelcomeMessage]);
   const [inputText, setInputText] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -141,6 +142,8 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  const getDraftKey = useCallback((projId: string) => `outgen_fsd_draft_${projId || 'global'}`, []);
 
   // 1. Load Initial Projects, Status, and Technical Doc Template
   useEffect(() => {
@@ -179,6 +182,62 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     };
     fetchApps();
   }, [selectedProjectId]);
+
+  // 2b. Restore project draft on project change / mount
+  useEffect(() => {
+    const key = getDraftKey(selectedProjectId);
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.sectionContents) setSectionContents(parsed.sectionContents);
+        if (parsed.documentMarkdown) setDocumentMarkdown(parsed.documentMarkdown);
+        if (parsed.insertedMsgIds) setInsertedMsgIds(parsed.insertedMsgIds);
+        if (parsed.selectedDocSection) setSelectedDocSection(parsed.selectedDocSection);
+        if (parsed.messages && Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+          setMessages(parsed.messages);
+        }
+        if (parsed.savedAt) {
+          setDraftSavedTime(new Date(parsed.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
+      } else {
+        // Reset when switching to a project without a draft
+        setSectionContents({});
+        setDocumentMarkdown('');
+        setInsertedMsgIds({});
+        setSelectedDocSection(null);
+        setDraftSavedTime(null);
+        setMessages([defaultWelcomeMessage]);
+      }
+    } catch (err) {
+      console.error('Failed to load draft from localStorage:', err);
+    }
+  }, [selectedProjectId, getDraftKey]);
+
+  // 2c. Auto-save draft to localStorage whenever contents/messages change
+  useEffect(() => {
+    const key = getDraftKey(selectedProjectId);
+    const hasContent = Object.keys(sectionContents).length > 0;
+    const hasCustomMessages = messages.length > 1;
+
+    if (!hasContent && !hasCustomMessages) return;
+
+    try {
+      const now = new Date();
+      const payload = {
+        sectionContents,
+        documentMarkdown,
+        insertedMsgIds,
+        selectedDocSection,
+        messages,
+        savedAt: now.toISOString(),
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
+      setDraftSavedTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (err) {
+      console.error('Failed to auto-save draft to localStorage:', err);
+    }
+  }, [selectedProjectId, sectionContents, documentMarkdown, insertedMsgIds, selectedDocSection, messages, getDraftKey]);
 
   // 3. Load Modules when Application changes
   useEffect(() => {
@@ -240,10 +299,12 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
       const updated = { ...prev, [targetKey]: cleanContent };
       // Also update documentMarkdown for raw editor / export
       const exportMd = FSD_OUTLINE.map((sec) => {
-        if (sec.level === 'parent') return `## ${sec.heading}`;
+        const hasChildren = FSD_OUTLINE.some((item) => item.parentId === sec.id);
+        if (sec.level === 'parent' && hasChildren) return `## ${sec.heading}`;
         const content = updated[sec.heading];
-        if (!content) return `### ${sec.heading}\n\n*Belum diisi*`;
-        return `### ${sec.heading}\n\n${content}`;
+        const prefix = sec.level === 'parent' ? `## ${sec.heading}` : `### ${sec.heading}`;
+        if (!content) return `${prefix}\n\n*Belum diisi*`;
+        return `${prefix}\n\n${content}`;
       }).join('\n\n');
       setDocumentMarkdown(exportMd);
       return updated;
@@ -1216,6 +1277,14 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                   {docCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
 
+                {/* Auto-saved draft indicator */}
+                {draftSavedTime && (
+                  <div className="hidden lg:flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md font-medium" title="Perubahan disimpan otomatis di browser dan tidak akan hilang saat reload">
+                    <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span>Tersimpan {draftSavedTime}</span>
+                  </div>
+                )}
+
                 {/* Export DOCX */}
                 <button
                   type="button"
@@ -1231,16 +1300,20 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.confirm('Reset semua konten yang telah disisipkan? Konten akan kembali kosong.')) {
+                    if (window.confirm('Reset semua konten yang telah disisipkan? Draft yang tersimpan akan dihapus.')) {
+                      const key = getDraftKey(selectedProjectId);
+                      localStorage.removeItem(key);
                       setSectionContents({});
                       setDocumentMarkdown('');
                       setInsertedMsgIds({});
                       setSelectedDocSection(null);
-                      toast.success('Dokumen direset ke outline kosong');
+                      setDraftSavedTime(null);
+                      setMessages([defaultWelcomeMessage]);
+                      toast.success('Dokumen & draft berhasil direset');
                     }
                   }}
                   className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-colors flex items-center gap-1 text-[11px] font-medium"
-                  title="Hapus semua konten yang telah disisipkan"
+                  title="Hapus semua konten yang telah disisipkan & hapus draft tersimpan"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span className="hidden xl:inline text-[10px]">Reset</span>
@@ -1268,19 +1341,29 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                   />
                 </div>
               ) : (
-                <div className="p-4 space-y-1 max-w-full">
+                <div className="p-4 space-y-1.5 max-w-full">
                   {/* Doc Title */}
-                  <div className="pb-3 mb-4 border-b-2 border-primary">
-                    <h2 className="font-black text-base text-primary tracking-tight">
-                      {activeProject?.name || 'OutSystems'} — Technical Specification Document
-                    </h2>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
-                      v{activeProject?.doc_version || '1.0'} · Klik <strong>[✨ Pilih Section]</strong> di bawah untuk memilih dan mengisi section
-                    </p>
+                  <div className="pb-3 mb-4 border-b-2 border-primary flex items-start justify-between gap-2">
+                    <div>
+                      <h2 className="font-black text-base text-primary tracking-tight">
+                        {activeProject?.name || 'OutSystems'} — Technical Specification Document
+                      </h2>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        v{activeProject?.doc_version || '1.0'} · Klik <strong>[✨ Pilih Section]</strong> pada setiap bagian untuk melengkapi spesifikasi
+                      </p>
+                    </div>
+                    {draftSavedTime && (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-medium shrink-0">
+                        ● Auto-saved
+                      </span>
+                    )}
                   </div>
 
                   {FSD_OUTLINE.map((sec) => {
-                    if (sec.level === 'parent') {
+                    const hasChildren = FSD_OUTLINE.some((item) => item.parentId === sec.id);
+
+                    // Parent category divider (for sections that contain sub-sections)
+                    if (sec.level === 'parent' && hasChildren) {
                       return (
                         <div key={sec.id} className="mt-6 mb-1">
                           <div className="flex items-center gap-2 px-2 py-1.5 bg-indigo-600/5 border-l-4 border-primary rounded-r-lg">
@@ -1291,27 +1374,30 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                       );
                     }
 
-                    // Sub-section
+                    // Sub-section OR Standalone parent section (e.g. 6. Deployment, 7. Appendix)
                     const isSelected = selectedDocSection === sec.heading;
                     const content = sectionContents[sec.heading];
+                    const isStandaloneParent = sec.level === 'parent' && !hasChildren;
 
                     return (
                       <div
                         key={sec.id}
                         id={`outline-sec-${sec.id}`}
-                        className={`ml-4 rounded-xl border transition-all duration-300 ${
+                        className={`${isStandaloneParent ? 'mt-5' : 'ml-4'} rounded-xl border transition-all duration-300 ${
                           isSelected
-                            ? 'border-primary bg-indigo-50/70 shadow-sm'
+                            ? 'border-primary bg-indigo-50/70 shadow-sm ring-1 ring-primary'
                             : content
                               ? 'border-emerald-200 bg-emerald-50/40'
-                              : 'border-slate-200/70 bg-white'
+                              : isStandaloneParent
+                                ? 'border-slate-300 bg-white shadow-2xs'
+                                : 'border-slate-200/70 bg-white'
                         }`}
                       >
-                        {/* Sub-section header row */}
+                        {/* Section header row */}
                         <div className={`flex items-center justify-between gap-2 px-3 py-2 ${content ? 'border-b border-slate-200/60' : ''}`}>
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className={`w-1.5 h-3 rounded-full shrink-0 ${content ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                            <h4 className={`font-bold text-xs truncate ${isSelected ? 'text-primary' : content ? 'text-emerald-800' : 'text-slate-700'}`}>
+                            <span className={`w-1.5 h-3 rounded-full shrink-0 ${content ? 'bg-emerald-500' : isStandaloneParent ? 'bg-indigo-500' : 'bg-slate-300'}`} />
+                            <h4 className={`font-bold text-xs truncate ${isSelected ? 'text-primary font-black' : content ? 'text-emerald-800' : isStandaloneParent ? 'text-slate-900' : 'text-slate-700'}`}>
                               {sec.heading}
                             </h4>
                             {content && (
@@ -1354,7 +1440,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
             {/* Bottom Status Bar */}
             <div className="px-4 py-1.5 bg-slate-50 border-t border-outline flex items-center justify-between text-[11px] text-slate-500">
               <span>
-                Terisi: <strong className="text-primary font-semibold">{Object.keys(sectionContents).length}</strong> dari {FSD_OUTLINE.filter(s => s.level === 'sub').length} sub-section
+                Terisi: <strong className="text-primary font-semibold">{Object.keys(sectionContents).length}</strong> dari {FSD_OUTLINE.filter(s => s.level === 'sub' || !FSD_OUTLINE.some(c => c.parentId === s.id)).length} section
               </span>
               <span>
                 {selectedDocSection ? (
