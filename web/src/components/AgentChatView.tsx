@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { api } from '../services/api';
 import { MermaidRenderer } from './MermaidRenderer';
 import { FSD_OUTLINE } from '../constants/fsdTemplate';
+import { exportToDocx } from '../utils/exportDocx';
 import type { 
   AgentChatMessage, 
   AgentStatus, 
@@ -411,56 +412,22 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     setTimeout(() => setDocCopied(false), 2000);
   };
 
-  const handleExportMarkdown = () => {
+  const handleExportDocx = async () => {
     const activeProj = projects.find((p) => p.id === selectedProjectId);
-    const filename = `${activeProj?.name || 'OutSystems'}_Technical_Specification_FSD.md`.replace(/\s+/g, '_');
-    const blob = new Blob([documentMarkdown], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Dokumen diekspor ke ${filename}`);
-  };
-
-  const handleExportHtmlDoc = () => {
-    const activeProj = projects.find((p) => p.id === selectedProjectId);
-    const filename = `${activeProj?.name || 'OutSystems'}_Technical_Specification_FSD.html`.replace(/\s+/g, '_');
-    const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${activeProj?.name || 'OutSystems'} Technical Specification Document</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #1e293b; }
-    h1 { color: #4338ca; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
-    h2 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-top: 32px; }
-    h3 { color: #334155; margin-top: 24px; }
-    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
-    th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; }
-    th { background-color: #f1f5f9; font-weight: 600; }
-    code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; }
-    pre { background: #0f172a; color: #f8fafc; padding: 16px; border-radius: 8px; overflow-x: auto; }
-    blockquote { border-left: 4px solid #6366f1; margin: 16px 0; padding: 8px 16px; background: #eef2ff; color: #312e81; }
-  </style>
-</head>
-<body>
-<pre style="white-space: pre-wrap; font-family: inherit; background: transparent; color: inherit; padding: 0;">${documentMarkdown}</pre>
-</body>
-</html>`;
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Dokumen diekspor ke format HTML siap cetak.`);
+    const projName = activeProj?.name || 'OutSystems';
+    const version = activeProj?.doc_version || '1.0';
+    if (!Object.keys(sectionContents).length) {
+      toast.error('Belum ada konten yang disisipkan. Isi minimal satu section sebelum mengekspor.');
+      return;
+    }
+    toast.promise(
+      exportToDocx(sectionContents, projName, version),
+      {
+        loading: 'Membuat file DOCX...',
+        success: `Berhasil diekspor: ${projName}_Technical_Specification_v${version}.docx`,
+        error: 'Gagal membuat DOCX. Silakan coba lagi.',
+      }
+    );
   };
 
   const handleCopyText = (id: string, text: string) => {
@@ -897,12 +864,12 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
             {/* Quick Export Button */}
             <button
               type="button"
-              onClick={handleExportMarkdown}
-              className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-strong text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
-              title="Download FSD Markdown (.md)"
+              onClick={handleExportDocx}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors"
+              title="Download FSD Dokumen Word (.docx)"
             >
               <Download className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Export .MD</span>
+              <span className="hidden md:inline">Export DOCX</span>
             </button>
 
           </div>
@@ -1249,14 +1216,15 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                   {docCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
 
-                {/* Export HTML / Print */}
+                {/* Export DOCX */}
                 <button
                   type="button"
-                  onClick={handleExportHtmlDoc}
-                  className="p-1.5 rounded-lg hover:bg-slate-200/70 text-slate-600 hover:text-slate-900 transition-colors"
-                  title="Export Dokumen HTML Siap Cetak"
+                  onClick={handleExportDocx}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold transition-colors shadow-sm"
+                  title="Export ke Microsoft Word (.docx)"
                 >
                   <FileDown className="w-3.5 h-3.5" />
+                  <span>Export DOCX</span>
                 </button>
 
                 {/* Reset Sections */}
