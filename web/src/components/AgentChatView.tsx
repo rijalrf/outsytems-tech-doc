@@ -22,12 +22,8 @@ import {
   Code,
   Columns,
   FileDown,
-  BookOpen,
-  Zap,
   ArrowRight,
-  Database,
-  Shield,
-  Server
+  X
 } from 'lucide-react';
 
 import { toast } from 'sonner';
@@ -51,36 +47,6 @@ interface AgentChatViewProps {
 
 type LayoutMode = 'split' | 'chat-only' | 'doc-only';
 type DocViewTab = 'preview' | 'editor';
-
-const DOCUMENT_SECTIONS = [
-  { id: '1.1', label: '1.1 Project General Information', target: '1.1 Project General Information' },
-  { id: '1.2', label: '1.2 Description & Scope (Background & Objectives)', target: '1.2 Description and Project Scope' },
-  { id: '2.1', label: '2.1 3-Layer Architecture Canvas', target: '2.1 3-Layer Architecture Canvas' },
-  { id: '2.2', label: '2.2 Application & Module Definitions', target: '2.2 Application & Module Definitions' },
-  { id: '2.3', label: '2.3 Theme & UI Framework', target: '2.3 Theme & UI Framework' },
-  { id: '2.4', label: '2.4 Forge Components', target: '2.4 Forge Components' },
-  { id: '2.5', label: '2.5 Environment Landscape', target: '2.5 Environment Landscape' },
-  { id: '2.6', label: '2.6 Application URL & Routing', target: '2.6 Application URL & Routing' },
-  { id: '3.1', label: '3.1 Impacted Systems Changes', target: '3.1 Impacted System\'s Changes Requirement' },
-  { id: '3.2', label: '3.2 Consumed APIs (REST/SOAP)', target: '3.2 Consumed APIs (REST/SOAP)' },
-  { id: '3.3', label: '3.3 Exposed APIs (REST/SOAP)', target: '3.3 Exposed API (REST/SOAP)' },
-  { id: '3.4', label: '3.4 External DB Connections', target: '3.4 External DB Connections' },
-  { id: '3.5', label: '3.5 Data Flow (Transaction & Master)', target: '3.5 Data Flow (Transaction & Master)' },
-  { id: '4.1', label: '4.1 Entity Relationship Diagram (ERD)', target: '4.1 Entity Relationship Diagram (ERD)' },
-  { id: '4.2', label: '4.2 Database Information & Entities', target: '4.2 Database Information & Entities' },
-  { id: '4.3', label: '4.3 Timers and Background Processes', target: '4.3 Timers and Background Processes' },
-  { id: '4.4', label: '4.4 Site Properties', target: '4.4 Site Properties' },
-  { id: '4.5', label: '4.5 Date, Time & Timezone', target: '4.5 Date, Time and Timezone Configurations' },
-  { id: '5.1', label: '5.1 Authentication & Login Flow', target: '5.1 Authentication' },
-  { id: '5.2', label: '5.2 Entitlement / Roles', target: '5.2 Entitlement / Authorization (Custom Roles)' },
-  { id: '5.3', label: '5.3 Document & Binary Storage', target: '5.3 Document & Binary Storage Strategy' },
-  { id: '5.4', label: '5.4 Global Exception Handling', target: '5.4 Global Exception & Error Handling' },
-  { id: '5.5', label: '5.5 URL Parameter Security', target: '5.5 URL Parameter Security' },
-  { id: '5.6', label: '5.6 Session Management', target: '5.6 Session Management' },
-  { id: '5.7', label: '5.7 Sensitive Information Management', target: '5.7 Credential and Sensitive Information Management' },
-  { id: '6.0', label: '6. Deployment Instructions', target: '6. Deployment' },
-  { id: '7.0', label: '7. Appendix & Glossary', target: '7. Appendix' },
-];
 
 const detectTargetSection = (content: string): string => {
   const lower = content.toLowerCase();
@@ -152,7 +118,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
   const [docCopied, setDocCopied] = useState<boolean>(false);
 
   // Message Insertion States
-  const [msgTargetSections, setMsgTargetSections] = useState<Record<string, string>>({});
+  const [selectedDocSection, setSelectedDocSection] = useState<string | null>(null);
   const [insertedMsgIds, setInsertedMsgIds] = useState<Record<string, boolean>>({});
 
   // Chat State
@@ -394,10 +360,13 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     const textToSend = (customPrompt || inputText).trim();
     if (!textToSend || loading) return;
 
+    const currentTargetSection = selectedDocSection || undefined;
+
     const userMsg: AgentChatMessage = {
       id: `usr_${Date.now()}`,
       role: 'user',
       content: textToSend,
+      targetSection: currentTargetSection,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
@@ -438,6 +407,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
         id: `ast_${Date.now()}`,
         role: 'assistant',
         content: response.content,
+        targetSection: currentTargetSection,
         tool_calls: response.tool_calls,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
@@ -617,40 +587,6 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     }));
   };
 
-  // Quick Prompt Categories
-  const quickFsdPrompts = [
-    {
-      icon: BookOpen,
-      title: '1. Overview & Scope',
-      prompt: 'Isi Section 1 (Project Overview, General Information, Background, Objectives, dan In-Scope Features) pada dokumen FSD dengan data dari project aktif.',
-    },
-    {
-      icon: Layers,
-      title: '2. 3-Layer Architecture',
-      prompt: 'Lengkapi Section 2 (OutSystems Application Architecture, 3-Layer Canvas, Module Definitions, Theme, Forge Components, dan Routing) berdasarkan modul-modul di aplikasi ini.',
-    },
-    {
-      icon: Server,
-      title: '3. Integrations & APIs',
-      prompt: 'Isi Section 3 (Integrations & Interfaces, Consumed APIs, Exposed Service Actions, External DBs, dan Data Flow Diagram) pada dokumen.',
-    },
-    {
-      icon: Database,
-      title: '4. ERD & Database Entities',
-      prompt: 'Buat diagram Mermaid ERD dan tabel rincian Database Entities & Attributes lengkap pada Section 4 (Data & Logic Design) untuk dokumen ini.',
-    },
-    {
-      icon: Shield,
-      title: '5. Security & Roles',
-      prompt: 'Isi Section 5 (Security, Entitlement, System Roles, Authentication flow, Binary Storage, dan Exception Handling) pada dokumen spesifikasi teknis.',
-    },
-    {
-      icon: Zap,
-      title: '🚀 Generate Seluruh FSD',
-      prompt: 'Generate dan lengkapi seluruh section pada dokumen FSD Technical Specification ini dari data project, aplikasi, dan modul yang tersedia!',
-    },
-  ];
-
   // Markdown rendering helper with support for interactive placeholders, tables, Mermaid diagrams, and code
   const renderMarkdownContent = (text: string, isDocumentPreview = false) => {
     const lines = text.split('\n');
@@ -798,21 +734,38 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
       // Headings
       if (trimmed.startsWith('### ')) {
         const headingText = trimmed.replace('### ', '');
+        const isSelected = selectedDocSection === headingText;
         elements.push(
-          <div key={idx} className="group flex items-center justify-between mt-5 mb-2 pb-1 border-b border-slate-100">
+          <div 
+            key={idx} 
+            className={`flex flex-wrap items-center justify-between gap-2 mt-6 mb-2.5 pb-1.5 border-b transition-all ${
+              isSelected 
+                ? 'border-primary bg-indigo-50/80 px-3.5 py-2 rounded-xl shadow-2xs border-l-4' 
+                : 'border-slate-200/80 hover:border-indigo-300'
+            }`}
+          >
             <h4 id={`sec-${idx}`} className="font-bold text-sm text-slate-900 flex items-center gap-2">
-              <span className="w-1.5 h-3.5 bg-primary rounded-full inline-block" />
-              <span>{headingText}</span>
+              <span className={`w-1.5 h-3.5 rounded-full inline-block ${isSelected ? 'bg-primary animate-pulse' : 'bg-primary'}`} />
+              <span className={isSelected ? 'text-primary font-black' : 'text-slate-900'}>{headingText}</span>
             </h4>
             {isDocumentPreview && (
               <button
                 type="button"
-                onClick={() => handleSendMessage(`Isi section "${headingText}" pada dokumen FSD dengan data faktual dari OutSystems database.`)}
-                className="opacity-0 group-hover:opacity-100 px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-primary hover:text-white text-primary text-[10px] font-bold transition-all flex items-center gap-1 shadow-xs"
-                title="Minta AI mengisi section ini"
+                onClick={() => {
+                  setSelectedDocSection(headingText);
+                  setInputText(`Lengkapi konten untuk section "${headingText}" secara komprehensif menggunakan data spesifikasi OutSystems.`);
+                  inputRef.current?.focus();
+                  toast.info(`Section aktif untuk AI: ${headingText}`);
+                }}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-xs ${
+                  isSelected
+                    ? 'bg-primary text-white ring-2 ring-primary ring-offset-1'
+                    : 'bg-indigo-50 hover:bg-primary hover:text-white text-primary border border-indigo-200'
+                }`}
+                title="Pilih sub-section ini untuk diisi oleh AI"
               >
-                <Sparkles className="w-2.5 h-2.5" />
-                <span>Isi Section</span>
+                <Sparkles className="w-3 h-3" />
+                <span>{isSelected ? '✓ Section Terpilih' : '✨ Pilih Section'}</span>
               </button>
             )}
           </div>
@@ -822,21 +775,11 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
       if (trimmed.startsWith('## ')) {
         const headingText = trimmed.replace('## ', '');
         elements.push(
-          <div key={idx} className="group flex items-center justify-between mt-7 mb-3 pb-1.5 border-b-2 border-indigo-100">
+          <div key={idx} className="flex items-center justify-between mt-8 mb-3.5 pb-2 border-b-2 border-indigo-200">
             <h3 id={`sec-${idx}`} className="font-black text-base text-slate-900 tracking-tight flex items-center gap-2">
               <span className="w-2 h-4 bg-gradient-to-b from-primary to-indigo-700 rounded-sm inline-block" />
               <span>{headingText}</span>
             </h3>
-            {isDocumentPreview && (
-              <button
-                type="button"
-                onClick={() => handleSendMessage(`Lengkapi seluruh isi ${headingText} pada dokumen FSD secara komprehensif.`)}
-                className="opacity-0 group-hover:opacity-100 px-2.5 py-1 rounded-lg bg-indigo-100 hover:bg-primary hover:text-white text-primary text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Generate Section</span>
-              </button>
-            )}
           </div>
         );
         return;
@@ -1210,59 +1153,49 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                       {msg.role === 'user' ? msg.content : renderMarkdownContent(msg.content, false)}
                     </div>
 
-                    {/* Insert to Document Action Bar for Assistant Messages */}
-                    {msg.role === 'assistant' && msg.id !== 'welcome' && !msg.isError && (
-                      <div className="mt-3.5 pt-2.5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 bg-slate-50/90 p-2 rounded-xl border border-slate-200">
-                        
-                        {/* Target Section Selector */}
-                        <div className="flex items-center gap-1.5 text-xs flex-1 min-w-[200px]">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight shrink-0">Section Target:</span>
-                          <select
-                            value={msgTargetSections[msg.id || ''] || detectTargetSection(msg.content)}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setMsgTargetSections(prev => ({ ...prev, [msg.id || '']: val }));
+                    {/* Insert to Document Action Bar for Assistant Messages (No Dropdown) */}
+                    {msg.role === 'assistant' && msg.id !== 'welcome' && !msg.isError && (() => {
+                      const targetSec = msg.targetSection || selectedDocSection || detectTargetSection(msg.content);
+                      const isInserted = !!insertedMsgIds[msg.id || ''];
+                      return (
+                        <div className="mt-3.5 pt-2.5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 bg-slate-50/90 p-2.5 rounded-xl border border-slate-200">
+                          
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">Target Section:</span>
+                            <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-[11px] font-bold text-primary shadow-2xs">
+                              {targetSec}
+                            </span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              applyDocumentPatch(targetSec, msg.content);
+                              setInsertedMsgIds(prev => ({ ...prev, [msg.id || '']: true }));
                             }}
-                            className="bg-white border border-slate-300 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-700 focus:outline-none focus:border-primary cursor-pointer w-full shadow-2xs truncate"
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-xs ${
+                              isInserted
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                : 'bg-primary hover:bg-primary-strong text-white'
+                            }`}
+                            title={`Sisipkan respon ini ke ${targetSec} pada live preview dokumen`}
                           >
-                            {DOCUMENT_SECTIONS.map((sec) => (
-                              <option key={sec.id} value={sec.target}>
-                                {sec.label}
-                              </option>
-                            ))}
-                          </select>
+                            {isInserted ? (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                <span>✓ Telah Disisipkan</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>📥 Sisipkan ke Dokumen</span>
+                              </>
+                            )}
+                          </button>
+
                         </div>
-
-                        {/* Sisipkan Button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const target = msgTargetSections[msg.id || ''] || detectTargetSection(msg.content);
-                            applyDocumentPatch(target, msg.content);
-                            setInsertedMsgIds(prev => ({ ...prev, [msg.id || '']: true }));
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-xs shrink-0 ${
-                            insertedMsgIds[msg.id || '']
-                              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                              : 'bg-primary hover:bg-primary-strong text-white'
-                          }`}
-                          title="Sisipkan respon AI ini ke section target pada dokumen preview di sebelah kanan"
-                        >
-                          {insertedMsgIds[msg.id || ''] ? (
-                            <>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                              <span>✓ Telah Disisipkan</span>
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="w-3.5 h-3.5" />
-                              <span>📥 Sisipkan ke Dokumen</span>
-                            </>
-                          )}
-                        </button>
-
-                      </div>
-                    )}
+                      );
+                    })()}
 
                   </div>
 
@@ -1294,28 +1227,33 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
             {/* Chat Input & Section Action Chips */}
             <div className="p-3 bg-white border-t border-outline space-y-2">
               
-              {/* Quick Section Prompt Chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
-                  <Zap className="w-3 h-3 text-amber-500" />
-                  Isi Section:
-                </span>
-                {quickFsdPrompts.map((q, idx) => {
-                  const Icon = q.icon;
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleSendMessage(q.prompt)}
-                      disabled={loading}
-                      className="px-2.5 py-1 rounded-full bg-slate-50 hover:bg-indigo-50 hover:text-primary text-slate-700 border border-slate-200 text-[11px] font-medium whitespace-nowrap transition-all flex items-center gap-1 shrink-0 disabled:opacity-50 shadow-xs"
-                    >
-                      <Icon className="w-3 h-3 text-primary" />
-                      <span>{q.title}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Selected Section Indicator Banner */}
+              {selectedDocSection ? (
+                <div className="flex items-center justify-between px-3 py-1.5 bg-indigo-50/90 border border-indigo-200 rounded-xl text-xs text-indigo-950 shadow-2xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-primary animate-ping shrink-0" />
+                    <span className="font-bold text-primary text-[10px] uppercase tracking-wider shrink-0">Section Aktif:</span>
+                    <span className="font-bold text-slate-800 text-xs truncate">{selectedDocSection}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDocSection(null);
+                      setInputText('');
+                    }}
+                    className="p-1 rounded-md hover:bg-indigo-200/60 text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1 text-[11px] font-medium shrink-0 ml-2"
+                    title="Batalkan pilihan section"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Ganti</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-[11px] text-slate-500">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>Pilih tombol <strong>[✨ Pilih Section]</strong> pada preview dokumen di kanan untuk mengisi bagian tertentu.</span>
+                </div>
+              )}
 
               {/* Textarea Input */}
               <div className="flex items-end gap-2 bg-slate-50 border border-outline rounded-2xl p-2 focus-within:border-primary focus-within:bg-white transition-all shadow-inner">
@@ -1325,7 +1263,11 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Instruksikan AI (misal: 'Isi Section 1 Background & Objectives', 'Buat ERD dan Entity Table')..."
+                  placeholder={
+                    selectedDocSection 
+                      ? `Ketik instruksi tambahan untuk ${selectedDocSection}...`
+                      : "Instruksikan AI untuk mengisi atau merancang spesifikasi teknis..."
+                  }
                   disabled={loading}
                   className="flex-1 bg-transparent border-0 resize-none text-xs text-slate-800 placeholder-slate-400 focus:outline-none px-2 py-1 leading-relaxed"
                 />
@@ -1441,60 +1383,6 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span className="hidden xl:inline text-[10px]">Reset Template</span>
                 </button>
-              </div>
-            </div>
-
-            {/* Quick Document Navigation & Legend */}
-            <div className="px-4 py-1.5 bg-slate-100/90 border-b border-outline flex items-center justify-between text-[11px] text-slate-600 overflow-x-auto no-scrollbar">
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-slate-500 uppercase tracking-wider text-[10px]">Lompat ke:</span>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('1. Project Overview')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
-                >
-                  1. Overview
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('2. OutSystems Application Architecture')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
-                >
-                  2. Architecture
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('3. Integrations & Interfaces')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
-                >
-                  3. Integrations
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('4. Data & Logic Design')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
-                >
-                  4. Data & Logic
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('5. Security, Entitlement')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
-                >
-                  5. Security
-                </button>
-                <button
-                  type="button"
-                  onClick={() => scrollToSection('6. Deployment')}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-primary hover:text-white border border-slate-200 transition-colors shrink-0 text-[11px] font-medium shadow-2xs"
-                >
-                  6. Deployment
-                </button>
-              </div>
-
-              <div className="hidden sm:flex items-center gap-2 text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
-                <Sparkles className="w-2.5 h-2.5 text-amber-600" />
-                <span>Klik badge placeholder untuk auto-generate</span>
               </div>
             </div>
 

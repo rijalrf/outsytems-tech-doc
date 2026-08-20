@@ -100,6 +100,7 @@ export interface AgentChatMessage {
   id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  targetSection?: string;
   tool_calls?: ToolCallTrace[];
   timestamp?: string;
   isError?: boolean;
