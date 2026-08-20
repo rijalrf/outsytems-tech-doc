@@ -50,6 +50,80 @@ interface AgentChatViewProps {
 type LayoutMode = 'split' | 'chat-only' | 'doc-only';
 type DocViewTab = 'preview' | 'editor';
 
+const DOCUMENT_SECTIONS = [
+  { id: '1.1', label: '1.1 Project General Information', target: '1.1 Project General Information' },
+  { id: '1.2', label: '1.2 Description & Scope (Background & Objectives)', target: '1.2 Description and Project Scope' },
+  { id: '2.1', label: '2.1 3-Layer Architecture Canvas', target: '2.1 3-Layer Architecture Canvas' },
+  { id: '2.2', label: '2.2 Application & Module Definitions', target: '2.2 Application & Module Definitions' },
+  { id: '2.3', label: '2.3 Theme & UI Framework', target: '2.3 Theme & UI Framework' },
+  { id: '2.4', label: '2.4 Forge Components', target: '2.4 Forge Components' },
+  { id: '2.5', label: '2.5 Environment Landscape', target: '2.5 Environment Landscape' },
+  { id: '2.6', label: '2.6 Application URL & Routing', target: '2.6 Application URL & Routing' },
+  { id: '3.1', label: '3.1 Impacted Systems Changes', target: '3.1 Impacted System\'s Changes Requirement' },
+  { id: '3.2', label: '3.2 Consumed APIs (REST/SOAP)', target: '3.2 Consumed APIs (REST/SOAP)' },
+  { id: '3.3', label: '3.3 Exposed APIs (REST/SOAP)', target: '3.3 Exposed API (REST/SOAP)' },
+  { id: '3.4', label: '3.4 External DB Connections', target: '3.4 External DB Connections' },
+  { id: '3.5', label: '3.5 Data Flow (Transaction & Master)', target: '3.5 Data Flow (Transaction & Master)' },
+  { id: '4.1', label: '4.1 Entity Relationship Diagram (ERD)', target: '4.1 Entity Relationship Diagram (ERD)' },
+  { id: '4.2', label: '4.2 Database Information & Entities', target: '4.2 Database Information & Entities' },
+  { id: '4.3', label: '4.3 Timers and Background Processes', target: '4.3 Timers and Background Processes' },
+  { id: '4.4', label: '4.4 Site Properties', target: '4.4 Site Properties' },
+  { id: '4.5', label: '4.5 Date, Time & Timezone', target: '4.5 Date, Time and Timezone Configurations' },
+  { id: '5.1', label: '5.1 Authentication & Login Flow', target: '5.1 Authentication' },
+  { id: '5.2', label: '5.2 Entitlement / Roles', target: '5.2 Entitlement / Authorization (Custom Roles)' },
+  { id: '5.3', label: '5.3 Document & Binary Storage', target: '5.3 Document & Binary Storage Strategy' },
+  { id: '5.4', label: '5.4 Global Exception Handling', target: '5.4 Global Exception & Error Handling' },
+  { id: '5.5', label: '5.5 URL Parameter Security', target: '5.5 URL Parameter Security' },
+  { id: '5.6', label: '5.6 Session Management', target: '5.6 Session Management' },
+  { id: '5.7', label: '5.7 Sensitive Information Management', target: '5.7 Credential and Sensitive Information Management' },
+  { id: '6.0', label: '6. Deployment Instructions', target: '6. Deployment' },
+  { id: '7.0', label: '7. Appendix & Glossary', target: '7. Appendix' },
+];
+
+const detectTargetSection = (content: string): string => {
+  const lower = content.toLowerCase();
+  if (lower.includes('erdiagram') || lower.includes('erd') || lower.includes('entity relationship')) {
+    return '4.1 Entity Relationship Diagram (ERD)';
+  }
+  if (lower.includes('attribute name') || lower.includes('entities') || lower.includes('database information') || lower.includes('archiving strategy')) {
+    return '4.2 Database Information & Entities';
+  }
+  if (lower.includes('3-layer') || lower.includes('architecture canvas') || lower.includes('end-user layer') || lower.includes('core layer')) {
+    return '2.1 3-Layer Architecture Canvas';
+  }
+  if (lower.includes('module definition') || lower.includes('parent application')) {
+    return '2.2 Application & Module Definitions';
+  }
+  if (lower.includes('consumed api') || lower.includes('rest/soap') || lower.includes('external api')) {
+    return '3.2 Consumed APIs (REST/SOAP)';
+  }
+  if (lower.includes('exposed api') || lower.includes('service action')) {
+    return '3.3 Exposed API (REST/SOAP)';
+  }
+  if (lower.includes('site propert')) {
+    return '4.4 Site Properties';
+  }
+  if (lower.includes('role') || lower.includes('entitlement') || lower.includes('hak akses')) {
+    return '5.2 Entitlement / Authorization (Custom Roles)';
+  }
+  if (lower.includes('authentication') || lower.includes('login flow') || lower.includes('saml')) {
+    return '5.1 Authentication';
+  }
+  if (lower.includes('exception') || lower.includes('error handling')) {
+    return '5.4 Global Exception & Error Handling';
+  }
+  if (lower.includes('deployment') || lower.includes('lifetime') || lower.includes('ci/cd')) {
+    return '6. Deployment';
+  }
+  if (lower.includes('general information') || lower.includes('project name') || lower.includes('business unit') || lower.includes('technical leader')) {
+    return '1.1 Project General Information';
+  }
+  if (lower.includes('background') || lower.includes('objective') || lower.includes('in-scope') || lower.includes('scope')) {
+    return '1.2 Description and Project Scope';
+  }
+  return '1.2 Description and Project Scope';
+};
+
 export const AgentChatView: React.FC<AgentChatViewProps> = ({
   initialProject = null,
   initialApp = null,
@@ -75,12 +149,16 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
   const [docLoading, setDocLoading] = useState<boolean>(false);
   const [docCopied, setDocCopied] = useState<boolean>(false);
 
+  // Message Insertion States
+  const [msgTargetSections, setMsgTargetSections] = useState<Record<string, string>>({});
+  const [insertedMsgIds, setInsertedMsgIds] = useState<Record<string, boolean>>({});
+
   // Chat State
   const [messages, setMessages] = useState<AgentChatMessage[]>([
     {
       id: 'welcome',
       role: 'assistant',
-      content: `👋 **Halo! Saya OutSystems Technical Specification & FSD Assistant.**\n\nSaya siap membantu Anda menyusun **Dokumen Spesifikasi Teknis (FSD)** secara komprehensif merujuk pada template standar di panel sebelah kanan.\n\nAnda dapat menekan tombol saran di bawah, mengklik badge placeholder di preview dokumen, atau langsung memberikan instruksi seperti:\n- *"Isi section 1.1 Project General Information dan 1.2 Description & Scope"* \n- *"Buat diagram ERD dan jelaskan database entities untuk modul Core Service"* \n- *"Lengkapi seluruh dokumen spesifikasi teknis"*`,
+      content: `👋 **Halo! Saya OutSystems Technical Specification & FSD Assistant.**\n\nSaya siap membantu Anda menyusun **Dokumen Spesifikasi Teknis (FSD)** secara komprehensif merujuk pada template standar di panel sebelah kanan.\n\nSetiap jawaban yang saya berikan dapat Anda tinjau terlebih dahulu dan dimasukkan ke dokumen menggunakan tombol **"📥 Sisipkan ke Dokumen"** pada bubble respon.\n\nContoh yang dapat Anda tanyakan:\n- *"Isi section 1.1 Project General Information dan 1.2 Description & Scope"* \n- *"Buat diagram ERD dan jelaskan database entities untuk modul Core Service"* \n- *"Lengkapi seluruh dokumen spesifikasi teknis"*`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -333,21 +411,6 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
           }
           return updated;
         });
-      }
-
-      // 3. Auto-detect if assistant response contains markdown sections to inject
-      if (response.content) {
-        const sectionMatches = response.content.match(/(?:^|\n)(##+ [^\n]+[\s\S]*?)(?=\n##+ |\n---|\n# |$)/g);
-        if (sectionMatches && sectionMatches.length > 0) {
-          sectionMatches.forEach((sec) => {
-            const secTrimmed = sec.trim();
-            const headerLine = secTrimmed.split('\n')[0];
-            const cleanTitle = headerLine.replace(/^#+\s*/, '').trim();
-            if (cleanTitle && secTrimmed.length > cleanTitle.length + 10) {
-              applyDocumentPatch(cleanTitle, secTrimmed);
-            }
-          });
-        }
       }
 
     } catch (err: any) {
@@ -1058,21 +1121,57 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                       {msg.role === 'user' ? msg.content : renderMarkdownContent(msg.content, false)}
                     </div>
 
-                    {/* Apply to Document Button for Assistant Messages */}
+                    {/* Insert to Document Action Bar for Assistant Messages */}
                     {msg.role === 'assistant' && msg.id !== 'welcome' && !msg.isError && (
-                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-end">
+                      <div className="mt-3.5 pt-2.5 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 bg-slate-50/90 p-2 rounded-xl border border-slate-200">
+                        
+                        {/* Target Section Selector */}
+                        <div className="flex items-center gap-1.5 text-xs flex-1 min-w-[200px]">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight shrink-0">Section Target:</span>
+                          <select
+                            value={msgTargetSections[msg.id || ''] || detectTargetSection(msg.content)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setMsgTargetSections(prev => ({ ...prev, [msg.id || '']: val }));
+                            }}
+                            className="bg-white border border-slate-300 rounded-md px-2 py-1 text-[11px] font-semibold text-slate-700 focus:outline-none focus:border-primary cursor-pointer w-full shadow-2xs truncate"
+                          >
+                            {DOCUMENT_SECTIONS.map((sec) => (
+                              <option key={sec.id} value={sec.target}>
+                                {sec.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Sisipkan Button */}
                         <button
                           type="button"
                           onClick={() => {
-                            applyDocumentPatch('1.2 Description and Project Scope', msg.content);
-                            toast.success('Konten berhasil diterapkan ke preview dokumen FSD.');
+                            const target = msgTargetSections[msg.id || ''] || detectTargetSection(msg.content);
+                            applyDocumentPatch(target, msg.content);
+                            setInsertedMsgIds(prev => ({ ...prev, [msg.id || '']: true }));
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-primary hover:text-white text-primary text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs"
-                          title="Terapkan teks respon ini ke dokumen FSD di sebelah kanan"
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-xs shrink-0 ${
+                            insertedMsgIds[msg.id || '']
+                              ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                              : 'bg-primary hover:bg-primary-strong text-white'
+                          }`}
+                          title="Sisipkan respon AI ini ke section target pada dokumen preview di sebelah kanan"
                         >
-                          <Sparkles className="w-3 h-3" />
-                          <span>📥 Terapkan ke Dokumen FSD</span>
+                          {insertedMsgIds[msg.id || ''] ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                              <span>✓ Telah Disisipkan</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>📥 Sisipkan ke Dokumen</span>
+                            </>
+                          )}
                         </button>
+
                       </div>
                     )}
 
