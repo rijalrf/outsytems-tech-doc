@@ -161,26 +161,34 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
 
   // Helper to replace placeholder or update document section
   const applyDocumentPatch = useCallback((sectionOrPlaceholder: string, newContent: string) => {
+    let wasUpdated = false;
     setDocumentMarkdown((prevDoc) => {
       // 1. Coba cari exact placeholder match
       if (prevDoc.includes(sectionOrPlaceholder)) {
-        return prevDoc.replace(sectionOrPlaceholder, newContent);
+        wasUpdated = true;
+        return prevDoc.replaceAll(sectionOrPlaceholder, newContent);
       }
 
-      // 2. Coba cari berdasarkan Section Header
+      // 2. Normalisasi keyword section
+      const cleanTarget = sectionOrPlaceholder.replace(/^#+\s*/, '').trim();
+
+      // 3. Coba cari berdasarkan Section Header
       const headerPatterns = [
-        `## ${sectionOrPlaceholder}`,
-        `### ${sectionOrPlaceholder}`,
-        `#### ${sectionOrPlaceholder}`,
+        `### ${cleanTarget}`,
+        `## ${cleanTarget}`,
+        `#### ${cleanTarget}`,
+        cleanTarget,
       ];
 
       for (const pattern of headerPatterns) {
         const idx = prevDoc.indexOf(pattern);
         if (idx !== -1) {
+          wasUpdated = true;
           // Cari batas section berikutnya
-          const nextHeaderIdx = prevDoc.slice(idx + pattern.length).search(/\n##+ /);
-          if (nextHeaderIdx !== -1) {
-            const endIdx = idx + pattern.length + nextHeaderIdx;
+          const afterHeader = prevDoc.slice(idx + pattern.length);
+          const nextHeaderMatch = afterHeader.search(/\n##+ /);
+          if (nextHeaderMatch !== -1) {
+            const endIdx = idx + pattern.length + nextHeaderMatch;
             return prevDoc.slice(0, idx + pattern.length) + '\n\n' + newContent + '\n' + prevDoc.slice(endIdx);
           } else {
             return prevDoc.slice(0, idx + pattern.length) + '\n\n' + newContent;
@@ -188,8 +196,30 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
         }
       }
 
+      // 4. Fallback: jika newContent mengandung header markdown sendiri (misal ### 1.2 ...), coba match header di dalam newContent
+      const innerHeaderMatch = newContent.match(/^(##+ [^\n]+)/m);
+      if (innerHeaderMatch) {
+        const foundHeader = innerHeaderMatch[1];
+        const hIdx = prevDoc.indexOf(foundHeader);
+        if (hIdx !== -1) {
+          wasUpdated = true;
+          const afterHeader = prevDoc.slice(hIdx);
+          const nextHeaderMatch = afterHeader.slice(foundHeader.length).search(/\n##+ /);
+          if (nextHeaderMatch !== -1) {
+            const endIdx = hIdx + foundHeader.length + nextHeaderMatch;
+            return prevDoc.slice(0, hIdx) + newContent + '\n' + prevDoc.slice(endIdx);
+          } else {
+            return prevDoc.slice(0, hIdx) + newContent;
+          }
+        }
+      }
+
       return prevDoc;
     });
+
+    if (wasUpdated) {
+      toast.success(`Dokumen FSD pada panel kanan berhasil diperbarui.`);
+    }
   }, []);
 
   // Send Message to AI Assistant
@@ -247,7 +277,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
 
       setMessages((prev) => [...prev, assistantMsg]);
 
-      // Check if any tool call updated document section
+      // 1. Process explicit update_document_section tool calls
       if (response.tool_calls && response.tool_calls.length > 0) {
         response.tool_calls.forEach((trace: ToolCallTrace) => {
           if (trace.tool_name === 'update_document_section' && trace.arguments) {
@@ -263,10 +293,9 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
         });
       }
 
-      // If the prompt was explicitly asking for background/objectives, or AI returned specific sections
+      // 2. Auto-sync project information to General Information & Scope table
       const activeProj = projects.find((p) => p.id === selectedProjectId);
       if (activeProj) {
-        // Auto sync project general info table if not filled
         setDocumentMarkdown((doc) => {
           let updated = doc;
           if (activeProj.project_name || activeProj.name) {
@@ -284,6 +313,18 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
           if (activeProj.technical_leader) {
             updated = updated.replace(/\[AI Generated \| Function: get_project_detail\(project_id\) -> technical_leader[^\]]*\]/g, activeProj.technical_leader);
           }
+          if (activeProj.start_date) {
+            updated = updated.replace(/\[AI Generated \| Function: get_project_detail\(project_id\) -> start_date[^\]]*\]/g, activeProj.start_date);
+          }
+          if (activeProj.go_live_date) {
+            updated = updated.replace(/\[AI Generated \| Function: get_project_detail\(project_id\) -> go_live_date[^\]]*\]/g, activeProj.go_live_date);
+          }
+          if (activeProj.doc_version) {
+            updated = updated.replace(/\[AI Generated \| Function: get_project_detail\(project_id\) -> doc_version[^\]]*\]/g, activeProj.doc_version);
+          }
+          if (activeProj.doc_status) {
+            updated = updated.replace(/\[AI Generated \| Function: get_project_detail\(project_id\) -> doc_status[^\]]*\]/g, activeProj.doc_status);
+          }
           if (activeProj.background) {
             updated = updated.replace(/\[AI Generated \| Function: get_project_detail\(project_id\) -> background[^\]]*\]/g, activeProj.background);
           }
@@ -292,6 +333,21 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
           }
           return updated;
         });
+      }
+
+      // 3. Auto-detect if assistant response contains markdown sections to inject
+      if (response.content) {
+        const sectionMatches = response.content.match(/(?:^|\n)(##+ [^\n]+[\s\S]*?)(?=\n##+ |\n---|\n# |$)/g);
+        if (sectionMatches && sectionMatches.length > 0) {
+          sectionMatches.forEach((sec) => {
+            const secTrimmed = sec.trim();
+            const headerLine = secTrimmed.split('\n')[0];
+            const cleanTitle = headerLine.replace(/^#+\s*/, '').trim();
+            if (cleanTitle && secTrimmed.length > cleanTitle.length + 10) {
+              applyDocumentPatch(cleanTitle, secTrimmed);
+            }
+          });
+        }
       }
 
     } catch (err: any) {
@@ -1001,6 +1057,24 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                     <div className={msg.role === 'user' ? 'text-white text-xs whitespace-pre-wrap leading-relaxed' : ''}>
                       {msg.role === 'user' ? msg.content : renderMarkdownContent(msg.content, false)}
                     </div>
+
+                    {/* Apply to Document Button for Assistant Messages */}
+                    {msg.role === 'assistant' && msg.id !== 'welcome' && !msg.isError && (
+                      <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            applyDocumentPatch('1.2 Description and Project Scope', msg.content);
+                            toast.success('Konten berhasil diterapkan ke preview dokumen FSD.');
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-primary hover:text-white text-primary text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs"
+                          title="Terapkan teks respon ini ke dokumen FSD di sebelah kanan"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>📥 Terapkan ke Dokumen FSD</span>
+                        </button>
+                      </div>
+                    )}
 
                   </div>
 
