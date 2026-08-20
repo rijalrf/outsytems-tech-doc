@@ -78,3 +78,30 @@ def get_agent_status():
         active_model=config.settings.openai_model,
         total_tools_available=len(registry.OPENAI_TOOLS),
     )
+
+
+@router.get(
+    "/template",
+    response_model=agentic_schema.TemplateResponse,
+    summary="Ambil Template Spesifikasi Teknis (FSD)",
+    description="Membaca dan mengembalikan isi template markdown Technical_Specification_Template-v2.md beserta metadata jumlah baris.",
+)
+def get_document_template(db: Session = Depends(database.get_db)):
+    result = registry.execute_tool_call(
+        db=db,
+        tool_name="get_technical_doc_template",
+        arguments={"template_name": "default"},
+    )
+    if result.get("status") == "error":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=result.get("message", "Template tidak ditemukan"),
+        )
+    return agentic_schema.TemplateResponse(
+        status="success",
+        template_name=result.get("template_name", "default"),
+        filename=result.get("filename", "Technical_Specification_Template-v2.md"),
+        total_lines=result.get("total_lines", 0),
+        template_content=result.get("template_content", ""),
+    )
+

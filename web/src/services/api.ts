@@ -9,7 +9,8 @@ import type {
   BatchProcessResponse,
   AgentChatRequest,
   AgentChatResponse,
-  AgentStatus
+  AgentStatus,
+  TemplateResponse
 } from '../types/api';
 
 
@@ -340,5 +341,15 @@ export const api = {
     if (!res.ok) throw new Error('Gagal mengambil daftar tools AI');
     return res.json();
   },
+
+  async getTechnicalDocTemplate(): Promise<TemplateResponse> {
+    const res = await fetch(`${BASE_URL}/agent/template`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Gagal memuat template dokumen spesifikasi teknis');
+    }
+    return res.json();
+  },
 };
+
 

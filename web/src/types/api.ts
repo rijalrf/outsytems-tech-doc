@@ -146,3 +146,20 @@ export interface AgentStatus {
   total_tools_available: number;
 }
 
+export interface TemplateResponse {
+  status: string;
+  template_name: string;
+  filename: string;
+  total_lines: number;
+  template_content: string;
+}
+
+export interface DocumentSection {
+  id: string;
+  title: string;
+  level: number;
+  lineStart: number;
+  lineEnd: number;
+}
+
+

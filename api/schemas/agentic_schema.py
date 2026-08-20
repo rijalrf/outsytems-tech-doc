@@ -43,3 +43,12 @@ class AgentStatusResponse(BaseModel):
     base_url: str
     active_model: str
     total_tools_available: int
+
+
+class TemplateResponse(BaseModel):
+    status: str
+    template_name: str
+    filename: str
+    total_lines: int
+    template_content: str
+
