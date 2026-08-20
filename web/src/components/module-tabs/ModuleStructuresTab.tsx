@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Search, Layers, ShieldCheck, User, Calendar, Columns } from 'lucide-react';
+import { Search, Layers, ShieldCheck, User, Calendar, Columns, FileDown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ensureArray, formatBoolean } from '../../utils/helpers';
+import { exportStructuresToDocx } from '../../utils/docxExporter';
 
 interface ModuleStructuresTabProps {
+  moduleName?: string;
   rawData: Record<string, any> | null;
 }
 
-export const ModuleStructuresTab: React.FC<ModuleStructuresTabProps> = ({ rawData }) => {
+export const ModuleStructuresTab: React.FC<ModuleStructuresTabProps> = ({ moduleName = 'Module', rawData }) => {
   const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const structuresRaw = rawData?.Structures?.Structure;
   const structuresList = ensureArray(structuresRaw);
@@ -20,10 +24,29 @@ export const ModuleStructuresTab: React.FC<ModuleStructuresTabProps> = ({ rawDat
     return nameMatch || attrMatch;
   });
 
+  const handleExportDocx = async () => {
+    if (structuresList.length === 0) {
+      toast.error('Tidak ada data structure untuk diekspor.');
+      return;
+    }
+    setExporting(true);
+    try {
+      await exportStructuresToDocx(
+        moduleName,
+        filteredStructures.length > 0 ? filteredStructures : structuresList
+      );
+      toast.success(`Berhasil mengekspor Structures ke .docx!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal mengekspor dokumen .docx');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Search Bar & Action Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -34,8 +57,25 @@ export const ModuleStructuresTab: React.FC<ModuleStructuresTabProps> = ({ rawDat
             className="w-full h-10 pl-10 pr-4 rounded-xl bg-surface border border-outline text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-2xs"
           />
         </div>
-        <div className="text-xs font-bold text-gray-500">
-          Total: <span className="text-primary font-black">{structuresList.length}</span> Structures
+
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <div className="text-xs font-bold text-gray-500">
+            Total: <span className="text-primary font-black">{structuresList.length}</span> Structures
+          </div>
+
+          <button
+            onClick={handleExportDocx}
+            disabled={exporting || structuresList.length === 0}
+            className="h-10 px-3.5 rounded-xl bg-primary hover:bg-primary-strong text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 active:scale-95"
+            title="Export Structures ke format Microsoft Word (.docx)"
+          >
+            {exporting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5" />
+            )}
+            <span>Export Docx</span>
+          </button>
         </div>
       </div>
 

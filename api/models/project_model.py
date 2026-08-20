@@ -37,6 +37,10 @@ class Project(database.Base):
     applications: Mapped[List["application_model.Application"]] = relationship(
         "Application",
         back_populates="project",
-        cascade="all",
+        cascade="all, delete-orphan",
         lazy="selectin",
     )
+
+    @property
+    def total_applications(self) -> int:
+        return len(self.applications) if self.applications else 0

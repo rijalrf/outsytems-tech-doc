@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core import config
+from models import project_model, application_model, module_model
 from routers import agentic_router, application_router, module_router, project_router
 
 app = FastAPI(

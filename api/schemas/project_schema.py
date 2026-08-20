@@ -47,6 +47,7 @@ class ProjectSummaryResponse(BaseModel):
     doc_status: Optional[str] = None
     background: Optional[str] = None
     objectives: Optional[str] = None
+    total_applications: int = 0
     created_at: datetime
     updated_at: datetime
 

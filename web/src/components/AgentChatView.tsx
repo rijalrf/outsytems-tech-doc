@@ -516,7 +516,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                 {/* Header Bubble */}
                 <div className="flex items-center justify-between gap-4 mb-1.5 pb-1 border-b border-black/5 dark:border-white/10 text-[11px]">
                   <span className={`font-bold ${msg.role === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
-                    {msg.role === 'user' ? 'Anda' : 'Doc-Gen AI Assistant'}
+                    {msg.role === 'user' ? 'Anda' : 'OutSystems AI Assistant'}
                   </span>
                   <div className="flex items-center gap-2">
                     <span className={`text-[10px] ${msg.role === 'user' ? 'text-blue-200' : 'text-gray-400'}`}>

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { UploadCloud, X, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface FileUploadModalProps {
@@ -71,8 +72,8 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 w-screen h-screen z-[99999] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-150">
       <div className="bg-surface w-full max-w-lg rounded-panel border border-outline shadow-2xl p-6 sm:p-8 relative my-auto">
         
         {/* Close Button */}
@@ -190,6 +191,7 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
         </form>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

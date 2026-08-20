@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onGoHome, onGoToAge
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-lg text-on-background tracking-tight">OUTSYSTEMS</span>
-                <span className="text-xs font-black px-2 py-0.5 rounded-pill bg-primary-soft text-primary">DOC-GEN</span>
+                <span className="text-xs font-black px-2 py-0.5 rounded-pill bg-primary-soft text-primary">INSPECTOR</span>
               </div>
               <p className="text-[11px] text-gray-500 font-medium">OAP & OML Architecture Inspector</p>
             </div>
@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onGoHome, onGoToAge
           {/* Center / Right Navigation & Status */}
           <div className="flex items-center gap-2.5 sm:gap-3">
             
-            {/* View Switcher: Projects Explorer vs AI Doc Assistant */}
+            {/* View Switcher: Projects Explorer vs AI Assistant */}
             <div className="flex items-center bg-gray-100 p-1 rounded-pill border border-outline">
               <button
                 onClick={onGoHome}
@@ -78,7 +78,6 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onGoHome, onGoToAge
               >
                 <Sparkles className={`w-3.5 h-3.5 ${currentView === 'agent-chat' ? 'text-yellow-300' : 'text-primary'}`} />
                 <span>AI Assistant</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-yellow-400 text-gray-900 font-black ml-0.5">NEW</span>
               </button>
             </div>
 

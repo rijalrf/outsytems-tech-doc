@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { Search, Database, ListOrdered, ShieldCheck, KeyRound } from 'lucide-react';
+import { Search, Database, ListOrdered, ShieldCheck, KeyRound, FileDown, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ensureArray, formatBoolean } from '../../utils/helpers';
+import { exportStaticEntitiesToDocx } from '../../utils/docxExporter';
 
 interface ModuleStaticEntitiesTabProps {
+  moduleName?: string;
   rawData: Record<string, any> | null;
 }
 
-export const ModuleStaticEntitiesTab: React.FC<ModuleStaticEntitiesTabProps> = ({ rawData }) => {
+export const ModuleStaticEntitiesTab: React.FC<ModuleStaticEntitiesTabProps> = ({ moduleName = 'Module', rawData }) => {
   const [search, setSearch] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const entitiesRaw = rawData?.Entities?.Entity;
   const entitiesList = ensureArray(entitiesRaw);
@@ -28,10 +32,29 @@ export const ModuleStaticEntitiesTab: React.FC<ModuleStaticEntitiesTabProps> = (
     return nameMatch || attrMatch || recordMatch;
   });
 
+  const handleExportDocx = async () => {
+    if (staticEntities.length === 0) {
+      toast.error('Tidak ada data static entity untuk diekspor.');
+      return;
+    }
+    setExporting(true);
+    try {
+      await exportStaticEntitiesToDocx(
+        moduleName,
+        filteredStaticEntities.length > 0 ? filteredStaticEntities : staticEntities
+      );
+      toast.success(`Berhasil mengekspor Static Entities ke .docx!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal mengekspor dokumen .docx');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Search Bar & Action Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
@@ -42,8 +65,25 @@ export const ModuleStaticEntitiesTab: React.FC<ModuleStaticEntitiesTabProps> = (
             className="w-full h-10 pl-10 pr-4 rounded-xl bg-surface border border-outline text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-2xs"
           />
         </div>
-        <div className="text-xs font-bold text-gray-500">
-          Total: <span className="text-primary font-black">{staticEntities.length}</span> Static Entities
+
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          <div className="text-xs font-bold text-gray-500">
+            Total: <span className="text-primary font-black">{staticEntities.length}</span> Static Entities
+          </div>
+
+          <button
+            onClick={handleExportDocx}
+            disabled={exporting || staticEntities.length === 0}
+            className="h-10 px-3.5 rounded-xl bg-primary hover:bg-primary-strong text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 active:scale-95"
+            title="Export Static Entities ke format Microsoft Word (.docx)"
+          >
+            {exporting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5" />
+            )}
+            <span>Export Docx</span>
+          </button>
         </div>
       </div>
 

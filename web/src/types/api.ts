@@ -1,7 +1,18 @@
 export interface ProjectSummary {
   id: string;
   name: string;
-  description: string | null;
+  project_name?: string;
+  platform?: string | null;
+  business_unit?: string | null;
+  project_manager?: string | null;
+  technical_leader?: string | null;
+  start_date?: string | null;
+  go_live_date?: string | null;
+  doc_version?: string | null;
+  doc_status?: string | null;
+  description?: string | null;
+  background?: string | null;
+  objectives?: string | null;
   created_at: string;
   updated_at: string;
   total_applications: number;
@@ -9,7 +20,32 @@ export interface ProjectSummary {
 
 export interface ProjectCreate {
   name: string;
+  project_name?: string;
+  platform?: string;
+  business_unit?: string;
+  project_manager?: string;
+  technical_leader?: string;
+  start_date?: string;
+  go_live_date?: string;
+  doc_version?: string;
+  doc_status?: string;
   description?: string;
+  background?: string;
+  objectives?: string;
+}
+
+export interface ProjectUpdate {
+  project_name?: string;
+  platform?: string;
+  business_unit?: string;
+  project_manager?: string;
+  technical_leader?: string;
+  start_date?: string;
+  go_live_date?: string;
+  doc_version?: string;
+  doc_status?: string;
+  background?: string;
+  objectives?: string;
 }
 
 export interface ApplicationSummary {

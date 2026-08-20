@@ -12,7 +12,8 @@ import type {
   ProjectSummary, 
   ApplicationSummary, 
   ModuleSummary, 
-  ProjectCreate 
+  ProjectCreate,
+  ProjectUpdate 
 } from './types/api';
 
 type ViewMode = 'projects' | 'applications' | 'modules' | 'module-detail' | 'agent-chat';
@@ -137,10 +138,21 @@ export const App: React.FC = () => {
   const handleCreateProject = async (data: ProjectCreate) => {
     try {
       await api.createProject(data);
-      toast.success(`Project "${data.name}" berhasil dibuat!`);
+      toast.success(`Project "${data.project_name || data.name}" berhasil dibuat!`);
       await loadProjects();
     } catch (err: any) {
       toast.error(err.message || 'Gagal membuat project');
+      throw err;
+    }
+  };
+
+  const handleUpdateProject = async (projectId: string, data: ProjectUpdate) => {
+    try {
+      await api.updateProject(projectId, data);
+      toast.success('Informasi project berhasil diperbarui!');
+      await loadProjects();
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal memperbarui project');
       throw err;
     }
   };
@@ -221,6 +233,7 @@ export const App: React.FC = () => {
               loading={loading}
               onSelectProject={handleSelectProject}
               onCreateProject={handleCreateProject}
+              onUpdateProject={handleUpdateProject}
               onDeleteProject={handleDeleteProject}
               onRefresh={loadProjects}
             />

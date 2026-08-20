@@ -2,6 +2,7 @@ import type {
   ProjectSummary, 
   ProjectDetail, 
   ProjectCreate, 
+  ProjectUpdate,
   ApplicationSummary, 
   ModuleSummary, 
   ModuleDetail, 
@@ -30,7 +31,18 @@ export const api = {
     return (data || []).map((p: any) => ({
       id: p.id,
       name: p.project_name || p.name || 'Unnamed Project',
+      project_name: p.project_name || p.name || 'Unnamed Project',
+      platform: p.platform || null,
+      business_unit: p.business_unit || null,
+      project_manager: p.project_manager || null,
+      technical_leader: p.technical_leader || null,
+      start_date: p.start_date || null,
+      go_live_date: p.go_live_date || null,
+      doc_version: p.doc_version || '1.0',
+      doc_status: p.doc_status || 'Draft',
       description: p.background || p.description || null,
+      background: p.background || null,
+      objectives: p.objectives || null,
       created_at: p.created_at,
       updated_at: p.updated_at,
       total_applications: Array.isArray(p.applications) ? p.applications.length : (p.total_applications || 0),
@@ -44,7 +56,18 @@ export const api = {
     return {
       id: p.id,
       name: p.project_name || p.name || 'Unnamed Project',
+      project_name: p.project_name || p.name || 'Unnamed Project',
+      platform: p.platform || null,
+      business_unit: p.business_unit || null,
+      project_manager: p.project_manager || null,
+      technical_leader: p.technical_leader || null,
+      start_date: p.start_date || null,
+      go_live_date: p.go_live_date || null,
+      doc_version: p.doc_version || '1.0',
+      doc_status: p.doc_status || 'Draft',
       description: p.background || p.description || null,
+      background: p.background || null,
+      objectives: p.objectives || null,
       created_at: p.created_at,
       updated_at: p.updated_at,
       total_applications: Array.isArray(p.applications) ? p.applications.length : (p.total_applications || 0),
@@ -67,8 +90,17 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        project_name: data.name,
-        background: data.description || '',
+        project_name: data.project_name || data.name,
+        platform: data.platform || null,
+        business_unit: data.business_unit || null,
+        project_manager: data.project_manager || null,
+        technical_leader: data.technical_leader || null,
+        start_date: data.start_date || null,
+        go_live_date: data.go_live_date || null,
+        doc_version: data.doc_version || '1.0',
+        doc_status: data.doc_status || 'Draft',
+        background: data.background || data.description || '',
+        objectives: data.objectives || '',
       }),
     });
     if (!res.ok) {
@@ -79,10 +111,53 @@ export const api = {
     return {
       id: p.id,
       name: p.project_name || p.name,
+      project_name: p.project_name || p.name,
+      platform: p.platform || null,
+      business_unit: p.business_unit || null,
+      project_manager: p.project_manager || null,
+      technical_leader: p.technical_leader || null,
+      start_date: p.start_date || null,
+      go_live_date: p.go_live_date || null,
+      doc_version: p.doc_version || '1.0',
+      doc_status: p.doc_status || 'Draft',
       description: p.background || p.description || null,
+      background: p.background || null,
+      objectives: p.objectives || null,
       created_at: p.created_at,
       updated_at: p.updated_at,
       total_applications: 0,
+    };
+  },
+
+  async updateProject(projectId: string, data: ProjectUpdate): Promise<ProjectSummary> {
+    const res = await fetch(`${BASE_URL}/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Gagal memperbarui informasi project');
+    }
+    const p = await res.json();
+    return {
+      id: p.id,
+      name: p.project_name || p.name,
+      project_name: p.project_name || p.name,
+      platform: p.platform || null,
+      business_unit: p.business_unit || null,
+      project_manager: p.project_manager || null,
+      technical_leader: p.technical_leader || null,
+      start_date: p.start_date || null,
+      go_live_date: p.go_live_date || null,
+      doc_version: p.doc_version || '1.0',
+      doc_status: p.doc_status || 'Draft',
+      description: p.background || p.description || null,
+      background: p.background || null,
+      objectives: p.objectives || null,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      total_applications: Array.isArray(p.applications) ? p.applications.length : (p.total_applications || 0),
     };
   },
 

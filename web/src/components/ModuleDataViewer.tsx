@@ -11,11 +11,14 @@ import {
   Layers,
   ShieldAlert,
   Settings2,
-  Code
+  Code,
+  FileDown
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ModuleSummary } from '../types/api';
 import { api } from '../services/api';
 import { ensureArray } from '../utils/helpers';
+import { exportFullModuleToDocx } from '../utils/docxExporter';
 
 import { ModuleInfoCard } from './module-tabs/ModuleInfoCard';
 import { ModuleActionsTab } from './module-tabs/ModuleActionsTab';
@@ -52,6 +55,7 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('actions');
+  const [exportingFull, setExportingFull] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchModuleData = async () => {
@@ -69,6 +73,19 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
 
     fetchModuleData();
   }, [module.id]);
+
+  const handleExportFullDocx = async () => {
+    if (!rawData) return;
+    setExportingFull(true);
+    try {
+      await exportFullModuleToDocx(module.module_name, rawData);
+      toast.success(`Berhasil mengekspor Spesifikasi Lengkap Modul ${module.module_name} ke .docx!`);
+    } catch (err: any) {
+      toast.error(err.message || 'Gagal mengekspor dokumen .docx');
+    } finally {
+      setExportingFull(false);
+    }
+  };
 
   // Compute counts for tab badges
   const actionsCount = ensureArray(rawData?.Actions?.Action).length;
@@ -119,8 +136,8 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* Top Header & Breadcrumb Back */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Header & Actions Toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <button
           onClick={onBackToModules}
           className="inline-flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-primary transition-colors bg-surface px-4 py-2 rounded-pill border border-outline w-fit shadow-2xs"
@@ -128,6 +145,22 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
           <ArrowLeft className="w-4 h-4 text-primary" />
           <span>Kembali ke Modul {module.module_name}</span>
         </button>
+
+        {rawData && (
+          <button
+            onClick={handleExportFullDocx}
+            disabled={exportingFull}
+            className="inline-flex items-center gap-2 text-xs font-bold text-white bg-gradient-to-r from-primary to-blue-600 hover:from-primary-strong hover:to-blue-700 px-4 py-2 rounded-pill shadow-sm transition-all disabled:opacity-50 active:scale-95 self-start sm:self-auto"
+            title="Export seluruh data modul ini ke satu file Word (.docx) lengkap"
+          >
+            {exportingFull ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5" />
+            )}
+            <span>Export Full Module Docx</span>
+          </button>
+        )}
       </div>
 
       {/* 1. Module Info Top Card */}
@@ -190,14 +223,30 @@ export const ModuleDataViewer: React.FC<ModuleDataViewerProps> = ({
 
           {/* 3. Tab Content View */}
           <div className="pt-2">
-            {activeTab === 'actions' && <ModuleActionsTab rawData={rawData} />}
-            {activeTab === 'service-actions' && <ModuleServiceActionsTab rawData={rawData} />}
-            {activeTab === 'entities' && <ModuleEntitiesTab rawData={rawData} />}
-            {activeTab === 'static-entities' && <ModuleStaticEntitiesTab rawData={rawData} />}
-            {activeTab === 'exceptions' && <ModuleExceptionsTab rawData={rawData} />}
-            {activeTab === 'structures' && <ModuleStructuresTab rawData={rawData} />}
-            {activeTab === 'roles' && <ModuleRolesTab rawData={rawData} />}
-            {activeTab === 'site-properties' && <ModuleSitePropertiesTab rawData={rawData} />}
+            {activeTab === 'actions' && (
+              <ModuleActionsTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'service-actions' && (
+              <ModuleServiceActionsTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'entities' && (
+              <ModuleEntitiesTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'static-entities' && (
+              <ModuleStaticEntitiesTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'exceptions' && (
+              <ModuleExceptionsTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'structures' && (
+              <ModuleStructuresTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'roles' && (
+              <ModuleRolesTab moduleName={module.module_name} rawData={rawData} />
+            )}
+            {activeTab === 'site-properties' && (
+              <ModuleSitePropertiesTab moduleName={module.module_name} rawData={rawData} />
+            )}
             {activeTab === 'raw-json' && (
               <ModuleRawJsonTab moduleName={module.module_name} rawData={rawData} />
             )}

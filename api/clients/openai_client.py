@@ -17,7 +17,7 @@ class OpenAIClient:
         base_url: Optional[str] = None,
         default_model: Optional[str] = None,
         temperature: Optional[float] = None,
-        timeout: float = 90.0,
+        timeout: float = 180.0,
     ):
         self.api_key = api_key if api_key is not None else config.settings.openai_api_key
         self.base_url = (base_url if base_url is not None else config.settings.openai_base_url).rstrip("/")
@@ -87,12 +87,28 @@ class OpenAIClient:
             content_type = response.headers.get("content-type", "").lower()
             text_data = response.text.strip()
 
-            # 1. Normal JSON response
-            if "application/json" in content_type or (text_data.startswith("{") and text_data.endswith("}")):
-                try:
-                    return response.json()
-                except Exception:
-                    pass
+            # 1. Normal JSON response or extracted JSON object
+            parsed_json = None
+            try:
+                parsed_json = response.json()
+            except Exception:
+                # Coba cari kurung kurawal pertama dan terakhir jika ada trailing data: [DONE]
+                first_brace = text_data.find("{")
+                last_brace = text_data.rfind("}")
+                if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+                    try:
+                        parsed_json = json.loads(text_data[first_brace : last_brace + 1])
+                    except Exception:
+                        pass
+
+            if parsed_json and isinstance(parsed_json, dict) and "choices" in parsed_json:
+                choices = parsed_json.get("choices", [])
+                if choices:
+                    msg = choices[0].get("message", {})
+                    # Jika content kosong tapi reasoning_content ada, gunakan reasoning_content
+                    if not msg.get("content") and msg.get("reasoning_content"):
+                        msg["content"] = msg["reasoning_content"]
+                return parsed_json
 
             # 2. SSE Fallback parsing (jika provider mengembalikan stream secara default)
             aggregated_content = []
@@ -114,8 +130,9 @@ class OpenAIClient:
                         choices = chunk.get("choices", [])
                         if choices:
                             delta = choices[0].get("delta", {})
-                            if delta.get("content"):
-                                aggregated_content.append(delta["content"])
+                            content_piece = delta.get("content") or delta.get("reasoning_content")
+                            if content_piece:
+                                aggregated_content.append(content_piece)
                             # Tool calls in stream
                             for tc in delta.get("tool_calls", []):
                                 idx = tc.get("index", 0)
