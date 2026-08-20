@@ -29,7 +29,7 @@ import {
 import { toast } from 'sonner';
 import { api } from '../services/api';
 import { MermaidRenderer } from './MermaidRenderer';
-import { DEFAULT_FSD_TEMPLATE } from '../constants/fsdTemplate';
+import { FSD_OUTLINE } from '../constants/fsdTemplate';
 import type { 
   AgentChatMessage, 
   AgentStatus, 
@@ -111,11 +111,13 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
   const [docViewTab, setDocViewTab] = useState<DocViewTab>('preview');
   const [status, setStatus] = useState<AgentStatus | null>(null);
 
-  // Document Markdown State
-  const [rawTemplate, setRawTemplate] = useState<string>(DEFAULT_FSD_TEMPLATE);
-  const [documentMarkdown, setDocumentMarkdown] = useState<string>(DEFAULT_FSD_TEMPLATE);
+  // Document Markdown State (for export / raw editor)
+  const [documentMarkdown, setDocumentMarkdown] = useState<string>('');
   const [docLoading, setDocLoading] = useState<boolean>(false);
   const [docCopied, setDocCopied] = useState<boolean>(false);
+
+  // Per-section inserted content: key = section heading, value = markdown string
+  const [sectionContents, setSectionContents] = useState<Record<string, string>>({});
 
   // Message Insertion States
   const [selectedDocSection, setSelectedDocSection] = useState<string | null>(null);
@@ -144,17 +146,12 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     const loadInitialData = async () => {
       setDocLoading(true);
       try {
-        const [projData, agentStatus, templateData] = await Promise.all([
+        const [projData, agentStatus] = await Promise.all([
           api.getProjects(),
           api.getAgentStatus().catch(() => null),
-          api.getTechnicalDocTemplate().catch(() => null),
         ]);
         setProjects(projData);
         if (agentStatus) setStatus(agentStatus);
-        if (templateData && templateData.template_content) {
-          setRawTemplate(templateData.template_content);
-          setDocumentMarkdown(templateData.template_content);
-        }
       } catch (err: any) {
         console.error('Failed to load initial data:', err);
       } finally {
@@ -223,136 +220,36 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     }, 150);
   }, []);
 
-  // Helper to replace placeholder or update document section
+  // Helper to insert content into a specific section by its heading
   const applyDocumentPatch = useCallback((sectionOrPlaceholder: string, newContent: string) => {
-    let wasUpdated = false;
     const cleanContent = newContent
       .replace(/^(?:Tentu|Baik|Berikut|Berikut adalah|Ini adalah|Halo)[^\n]*\n+/i, '')
       .trim();
 
-    setDocumentMarkdown((prevDoc) => {
-      let doc = prevDoc && prevDoc.length > 50 ? prevDoc : DEFAULT_FSD_TEMPLATE;
-
-      // 1. Coba cari exact placeholder match
-      if (doc.includes(sectionOrPlaceholder)) {
-        wasUpdated = true;
-        return doc.replaceAll(sectionOrPlaceholder, cleanContent);
-      }
-
-      // 2. Penanganan khusus Section 1.2 (Background & Objectives)
-      if (
-        sectionOrPlaceholder.includes('1.2') ||
-        sectionOrPlaceholder.toLowerCase().includes('background') ||
-        sectionOrPlaceholder.toLowerCase().includes('objective')
-      ) {
-        const bgMatch = cleanContent.match(/\*\*Background\*\*([\s\S]*?)(?=\*\*Objectives\*\*|\*\*In-Scope Features\*\*|$)/i);
-        const objMatch = cleanContent.match(/\*\*Objectives\*\*([\s\S]*?)(?=\*\*In-Scope Features\*\*|$)/i);
-
-        if (bgMatch && bgMatch[1].trim()) {
-          const bgText = bgMatch[1].trim();
-          doc = doc.replace(
-            /\[AI Generated \| Function: get_project_detail\(project_id\) -> background[^\]]*\]/g,
-            bgText
-          );
-          wasUpdated = true;
-        }
-        if (objMatch && objMatch[1].trim()) {
-          const objText = objMatch[1].trim();
-          doc = doc.replace(
-            /\[AI Generated \| Function: get_project_detail\(project_id\) -> objectives[^\]]*\]/g,
-            objText
-          );
-          wasUpdated = true;
-        }
-
-        if (!bgMatch && !objMatch) {
-          if (doc.includes('get_project_detail(project_id) -> background')) {
-            doc = doc.replace(
-              /\[AI Generated \| Function: get_project_detail\(project_id\) -> background[^\]]*\]/g,
-              cleanContent
-            );
-            wasUpdated = true;
-            return doc;
-          }
-        } else {
-          return doc;
-        }
-      }
-
-      // 3. Penanganan khusus Section 4.1 (ERD)
-      if (sectionOrPlaceholder.includes('4.1') || sectionOrPlaceholder.toLowerCase().includes('erd')) {
-        const mermaidMatch = cleanContent.match(/```mermaid[\s\S]*?```/);
-        if (mermaidMatch) {
-          const erdPlaceholder = /```mermaid\nerDiagram[\s\S]*?```/;
-          if (erdPlaceholder.test(doc)) {
-            wasUpdated = true;
-            return doc.replace(erdPlaceholder, mermaidMatch[0]);
-          }
-        }
-      }
-
-      // 4. Penanganan khusus Section 4.2 (Database Information & Entities)
-      if (sectionOrPlaceholder.includes('4.2') || sectionOrPlaceholder.toLowerCase().includes('database information')) {
-        const sec42Idx = doc.indexOf('### 4.2 Database Information & Entities');
-        if (sec42Idx !== -1) {
-          const nextSecIdx = doc.indexOf('### 4.3 Timers and Background Processes', sec42Idx);
-          if (nextSecIdx !== -1) {
-            wasUpdated = true;
-            return doc.slice(0, sec42Idx) + '### 4.2 Database Information & Entities\n\n' + cleanContent + '\n\n' + doc.slice(nextSecIdx);
-          }
-        }
-      }
-
-      // 5. Normalisasi keyword section & pencarian batas section umum
-      const cleanTarget = sectionOrPlaceholder.replace(/^#+\s*/, '').trim();
-      const headerPatterns = [
-        `### ${cleanTarget}`,
-        `## ${cleanTarget}`,
-        `#### ${cleanTarget}`,
-        cleanTarget,
-      ];
-
-      for (const pattern of headerPatterns) {
-        const idx = doc.indexOf(pattern);
-        if (idx !== -1) {
-          wasUpdated = true;
-          const afterHeader = doc.slice(idx + pattern.length);
-          const nextHeaderMatch = afterHeader.search(/\n(?:##+|---)\s+/);
-          const endIdx = nextHeaderMatch !== -1 ? idx + pattern.length + nextHeaderMatch : doc.length;
-          
-          if (cleanContent.startsWith('#') || cleanContent.toLowerCase().includes(pattern.toLowerCase())) {
-            return doc.slice(0, idx) + cleanContent + '\n\n' + doc.slice(endIdx);
-          } else {
-            return doc.slice(0, idx + pattern.length) + '\n\n' + cleanContent + '\n\n' + doc.slice(endIdx);
-          }
-        }
-      }
-
-      // 6. Fallback: jika cleanContent mengandung heading sendiri
-      const innerHeaderMatch = cleanContent.match(/^(##+ [^\n]+)/m);
-      if (innerHeaderMatch) {
-        const foundHeader = innerHeaderMatch[1];
-        const hIdx = doc.indexOf(foundHeader);
-        if (hIdx !== -1) {
-          wasUpdated = true;
-          const afterHeader = doc.slice(hIdx);
-          const nextHeaderMatch = afterHeader.slice(foundHeader.length).search(/\n(?:##+|---)\s+/);
-          const endIdx = nextHeaderMatch !== -1 ? hIdx + foundHeader.length + nextHeaderMatch : doc.length;
-          return doc.slice(0, hIdx) + cleanContent + '\n\n' + doc.slice(endIdx);
-        }
-      }
-
-      // 7. Fallback Terakhir: Jika section sama sekali baru, sisipkan di akhir dokumen
-      wasUpdated = true;
-      return doc + `\n\n### ${cleanTarget}\n\n` + cleanContent;
+    // Find the best matching section heading from FSD_OUTLINE
+    const matchedSection = FSD_OUTLINE.find((sec) => {
+      const a = sec.heading.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const b = sectionOrPlaceholder.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return a === b || a.includes(b) || b.includes(a);
     });
 
-    if (wasUpdated) {
-      toast.success(`Dokumen berhasil disisipkan ke: ${sectionOrPlaceholder}`);
-      scrollToSection(sectionOrPlaceholder);
-    } else {
-      toast.info(`Konten disisipkan ke dokumen.`);
-    }
+    const targetKey = matchedSection ? matchedSection.heading : sectionOrPlaceholder;
+
+    setSectionContents((prev) => {
+      const updated = { ...prev, [targetKey]: cleanContent };
+      // Also update documentMarkdown for raw editor / export
+      const exportMd = FSD_OUTLINE.map((sec) => {
+        if (sec.level === 'parent') return `## ${sec.heading}`;
+        const content = updated[sec.heading];
+        if (!content) return `### ${sec.heading}\n\n*Belum diisi*`;
+        return `### ${sec.heading}\n\n${content}`;
+      }).join('\n\n');
+      setDocumentMarkdown(exportMd);
+      return updated;
+    });
+
+    toast.success(`Disisipkan ke: ${targetKey}`);
+    scrollToSection(targetKey);
   }, [scrollToSection]);
 
   // Send Message to AI Assistant
@@ -505,13 +402,6 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
       },
     ]);
     toast.info('Riwayat percakapan dibersihkan');
-  };
-
-  const handleResetDocument = () => {
-    if (rawTemplate) {
-      setDocumentMarkdown(rawTemplate);
-      toast.success('Dokumen FSD berhasil direset ke template standar.');
-    }
   };
 
   const handleCopyMarkdown = () => {
@@ -1369,53 +1259,142 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
                   <FileDown className="w-3.5 h-3.5" />
                 </button>
 
-                {/* Reset Document to Template */}
+                {/* Reset Sections */}
                 <button
                   type="button"
                   onClick={() => {
-                    if (window.confirm('Apakah Anda yakin ingin mereset seluruh isi dokumen kembali ke template awal? Perubahan yang belum diexport akan hilang.')) {
-                      handleResetDocument();
+                    if (window.confirm('Reset semua konten yang telah disisipkan? Konten akan kembali kosong.')) {
+                      setSectionContents({});
+                      setDocumentMarkdown('');
+                      setInsertedMsgIds({});
+                      setSelectedDocSection(null);
+                      toast.success('Dokumen direset ke outline kosong');
                     }
                   }}
                   className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-600 hover:text-rose-600 transition-colors flex items-center gap-1 text-[11px] font-medium"
-                  title="Reset dokumen ke template semula (Hapus editan)"
+                  title="Hapus semua konten yang telah disisipkan"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span className="hidden xl:inline text-[10px]">Reset Template</span>
+                  <span className="hidden xl:inline text-[10px]">Reset</span>
                 </button>
               </div>
             </div>
 
-            {/* Document Content View */}
-            <div ref={previewContainerRef} className="flex-1 p-6 overflow-y-auto bg-white">
+            {/* Document Content View — FSD Section Outline */}
+            <div ref={previewContainerRef} className="flex-1 overflow-y-auto bg-slate-50">
               {docLoading ? (
                 <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-3">
                   <RefreshCw className="w-6 h-6 animate-spin text-primary" />
-                  <span className="text-xs font-medium">Memuat template dokumen spesifikasi teknis...</span>
+                  <span className="text-xs font-medium">Memuat data...</span>
                 </div>
               ) : docViewTab === 'editor' ? (
-                <div className="h-full flex flex-col space-y-2">
+                <div className="h-full flex flex-col space-y-2 p-4">
                   <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
-                    <span>Editor Markdown (Edit langsung untuk menyesuaikan teks):</span>
+                    <span>Editor Markdown (seluruh konten yang telah disisipkan):</span>
                     <span>{documentMarkdown.split('\n').length} baris</span>
                   </div>
                   <textarea
                     value={documentMarkdown}
                     onChange={(e) => setDocumentMarkdown(e.target.value)}
-                    className="flex-1 w-full p-4 font-mono text-xs text-slate-800 bg-slate-50 border border-outline rounded-xl resize-none focus:outline-none focus:border-primary leading-relaxed shadow-inner"
+                    className="flex-1 w-full p-4 font-mono text-xs text-slate-800 bg-white border border-outline rounded-xl resize-none focus:outline-none focus:border-primary leading-relaxed shadow-inner"
                   />
                 </div>
               ) : (
-                <div className="max-w-4xl mx-auto space-y-2 selection:bg-indigo-100">
-                  {renderMarkdownContent(documentMarkdown, true)}
+                <div className="p-4 space-y-1 max-w-full">
+                  {/* Doc Title */}
+                  <div className="pb-3 mb-4 border-b-2 border-primary">
+                    <h2 className="font-black text-base text-primary tracking-tight">
+                      {activeProject?.name || 'OutSystems'} — Technical Specification Document
+                    </h2>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      v{activeProject?.doc_version || '1.0'} · Klik <strong>[✨ Pilih Section]</strong> di bawah untuk memilih dan mengisi section
+                    </p>
+                  </div>
+
+                  {FSD_OUTLINE.map((sec) => {
+                    if (sec.level === 'parent') {
+                      return (
+                        <div key={sec.id} className="mt-6 mb-1">
+                          <div className="flex items-center gap-2 px-2 py-1.5 bg-indigo-600/5 border-l-4 border-primary rounded-r-lg">
+                            <span className="w-2 h-4 bg-gradient-to-b from-primary to-indigo-700 rounded-sm inline-block shrink-0" />
+                            <h3 className="font-black text-sm text-slate-900 tracking-tight">{sec.heading}</h3>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Sub-section
+                    const isSelected = selectedDocSection === sec.heading;
+                    const content = sectionContents[sec.heading];
+
+                    return (
+                      <div
+                        key={sec.id}
+                        id={`outline-sec-${sec.id}`}
+                        className={`ml-4 rounded-xl border transition-all duration-300 ${
+                          isSelected
+                            ? 'border-primary bg-indigo-50/70 shadow-sm'
+                            : content
+                              ? 'border-emerald-200 bg-emerald-50/40'
+                              : 'border-slate-200/70 bg-white'
+                        }`}
+                      >
+                        {/* Sub-section header row */}
+                        <div className={`flex items-center justify-between gap-2 px-3 py-2 ${content ? 'border-b border-slate-200/60' : ''}`}>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`w-1.5 h-3 rounded-full shrink-0 ${content ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                            <h4 className={`font-bold text-xs truncate ${isSelected ? 'text-primary' : content ? 'text-emerald-800' : 'text-slate-700'}`}>
+                              {sec.heading}
+                            </h4>
+                            {content && (
+                              <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold uppercase tracking-wider shrink-0">
+                                ✓ Terisi
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDocSection(sec.heading);
+                              setInputText(`Lengkapi konten untuk section "${sec.heading}" secara komprehensif menggunakan data spesifikasi OutSystems.`);
+                              inputRef.current?.focus();
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all flex items-center gap-1 shrink-0 ${
+                              isSelected
+                                ? 'bg-primary text-white ring-2 ring-primary ring-offset-1'
+                                : 'bg-slate-100 hover:bg-primary hover:text-white text-slate-600 border border-slate-200'
+                            }`}
+                          >
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>{isSelected ? '✓ Terpilih' : '✨ Pilih Section'}</span>
+                          </button>
+                        </div>
+
+                        {/* Inserted content area */}
+                        {content && (
+                          <div className="px-4 py-3 text-xs text-slate-700 leading-relaxed max-h-80 overflow-y-auto">
+                            {renderMarkdownContent(content, false)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* Bottom Status Bar */}
             <div className="px-4 py-1.5 bg-slate-50 border-t border-outline flex items-center justify-between text-[11px] text-slate-500">
-              <span>Status: <strong className="text-primary font-semibold">{documentMarkdown.includes('[AI Generated') ? 'Template Memiliki Placeholder Aktif' : 'Dokumen Terisi Lengkap'}</strong></span>
-              <span>Karakter: {documentMarkdown.length.toLocaleString()}</span>
+              <span>
+                Terisi: <strong className="text-primary font-semibold">{Object.keys(sectionContents).length}</strong> dari {FSD_OUTLINE.filter(s => s.level === 'sub').length} sub-section
+              </span>
+              <span>
+                {selectedDocSection ? (
+                  <span className="text-primary font-bold">● Aktif: {selectedDocSection}</span>
+                ) : (
+                  'Pilih section dari panel kanan'
+                )}
+              </span>
             </div>
 
           </div>

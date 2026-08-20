@@ -264,3 +264,51 @@ flowchart TD
 ## 7. Appendix
 [AI Generated | Function: get_project_detail(project_id) + list_applications() | Detail: Add OutSystems Architecture references, Service Center links, glossary terms, or related OAP/OML artifact documents.]
 `;
+
+export interface FsdSection {
+  id: string;
+  level: 'parent' | 'sub';
+  heading: string;
+  parentId?: string;
+}
+
+export const FSD_OUTLINE: FsdSection[] = [
+  { id: '1', level: 'parent', heading: '1. Project Overview' },
+  { id: '1.1', level: 'sub', heading: '1.1 Project General Information', parentId: '1' },
+  { id: '1.2', level: 'sub', heading: '1.2 Description and Project Scope', parentId: '1' },
+
+  { id: '2', level: 'parent', heading: '2. OutSystems Application Architecture' },
+  { id: '2.1', level: 'sub', heading: '2.1 3-Layer Architecture Canvas', parentId: '2' },
+  { id: '2.2', level: 'sub', heading: '2.2 Application & Module Definitions', parentId: '2' },
+  { id: '2.3', level: 'sub', heading: '2.3 Theme & UI Framework', parentId: '2' },
+  { id: '2.4', level: 'sub', heading: '2.4 Forge Components', parentId: '2' },
+  { id: '2.5', level: 'sub', heading: '2.5 Environment Landscape', parentId: '2' },
+  { id: '2.6', level: 'sub', heading: '2.6 Application URL & Routing', parentId: '2' },
+
+  { id: '3', level: 'parent', heading: '3. Integrations & Interfaces' },
+  { id: '3.1', level: 'sub', heading: "3.1 Impacted System's Changes Requirement", parentId: '3' },
+  { id: '3.2', level: 'sub', heading: '3.2 Consumed APIs (REST/SOAP)', parentId: '3' },
+  { id: '3.3', level: 'sub', heading: '3.3 Exposed API (REST/SOAP)', parentId: '3' },
+  { id: '3.4', level: 'sub', heading: '3.4 External DB Connections', parentId: '3' },
+  { id: '3.5', level: 'sub', heading: '3.5 Data Flow (Transaction & Master)', parentId: '3' },
+
+  { id: '4', level: 'parent', heading: '4. Data & Logic Design' },
+  { id: '4.1', level: 'sub', heading: '4.1 Entity Relationship Diagram (ERD)', parentId: '4' },
+  { id: '4.2', level: 'sub', heading: '4.2 Database Information & Entities', parentId: '4' },
+  { id: '4.3', level: 'sub', heading: '4.3 Timers and Background Processes', parentId: '4' },
+  { id: '4.4', level: 'sub', heading: '4.4 Site Properties', parentId: '4' },
+  { id: '4.5', level: 'sub', heading: '4.5 Date, Time and Timezone Configurations', parentId: '4' },
+
+  { id: '5', level: 'parent', heading: '5. Security, Entitlement and Compliance' },
+  { id: '5.1', level: 'sub', heading: '5.1 Authentication', parentId: '5' },
+  { id: '5.2', level: 'sub', heading: '5.2 Entitlement / Authorization (Custom Roles)', parentId: '5' },
+  { id: '5.3', level: 'sub', heading: '5.3 Document & Binary Storage Strategy', parentId: '5' },
+  { id: '5.4', level: 'sub', heading: '5.4 Global Exception & Error Handling', parentId: '5' },
+  { id: '5.5', level: 'sub', heading: '5.5 URL Parameter Security', parentId: '5' },
+  { id: '5.6', level: 'sub', heading: '5.6 Session Management', parentId: '5' },
+  { id: '5.7', level: 'sub', heading: '5.7 Credential and Sensitive Information Management', parentId: '5' },
+
+  { id: '6', level: 'parent', heading: '6. Deployment' },
+  { id: '7', level: 'parent', heading: '7. Appendix' },
+];
+
