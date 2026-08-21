@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from agentic.functions import (
     application_functions,
+    document_functions,
     module_functions,
     project_functions,
 )
@@ -281,6 +282,48 @@ OPENAI_TOOLS: List[Dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_technical_doc_template",
+            "description": "Mengambil isi template spesifikasi teknis (FSD / Technical Specification Document) dalam format Markdown. Sangat berguna untuk mengetahui struktur section, tabel, dan placeholder yang perlu diisi.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template_name": {
+                        "type": "string",
+                        "description": "Nama template yang ingin diambil (default: 'default').",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_document_section",
+            "description": "Memperbarui atau mengisi bagian/section tertentu pada dokumen spesifikasi teknis (FSD) dengan format Markdown terstruktur yang telah digenerate (misal: 1.1 Project General Information, 1.2 Description & Scope, 2.1 Architecture Canvas, 3.2 Consumed APIs, 4.1 ERD, 4.2 Database Entities, 5.1 Security Roles, dll).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "section_title": {
+                        "type": "string",
+                        "description": "Judul atau identifier section yang diupdate (contoh: '1.2 Description and Project Scope', '4.1 Entity Relationship Diagram', '4.2 Database Information & Entities').",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Konten Markdown lengkap hasil sintesis / data riil dari database OutSystems untuk menggantikan placeholder pada section tersebut.",
+                    },
+                    "placeholder_target": {
+                        "type": "string",
+                        "description": "Teks placeholder spesifik yang ingin digantikan (opsional).",
+                    },
+                },
+                "required": ["section_title", "content"],
+            },
+        },
+    },
 ]
 
 
@@ -302,6 +345,8 @@ FUNCTION_HANDLERS: Dict[str, Callable[..., Any]] = {
     "get_module_site_properties": module_functions.get_module_site_properties,
     "get_module_system_roles": module_functions.get_module_system_roles,
     "get_module_exceptions": module_functions.get_module_exceptions,
+    "get_technical_doc_template": document_functions.get_technical_doc_template,
+    "update_document_section": document_functions.update_document_section,
 }
 
 

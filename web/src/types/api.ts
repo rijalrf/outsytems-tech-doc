@@ -100,6 +100,7 @@ export interface AgentChatMessage {
   id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  targetSection?: string;
   tool_calls?: ToolCallTrace[];
   timestamp?: string;
   isError?: boolean;
@@ -145,4 +146,21 @@ export interface AgentStatus {
   active_model: string;
   total_tools_available: number;
 }
+
+export interface TemplateResponse {
+  status: string;
+  template_name: string;
+  filename: string;
+  total_lines: number;
+  template_content: string;
+}
+
+export interface DocumentSection {
+  id: string;
+  title: string;
+  level: number;
+  lineStart: number;
+  lineEnd: number;
+}
+
 
