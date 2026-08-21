@@ -267,7 +267,7 @@ export const AgentChatView: React.FC<AgentChatViewProps> = ({
     setTimeout(() => {
       if (!previewContainerRef.current) return;
       const clean = targetSection.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const headings = previewContainerRef.current.querySelectorAll('h2, h3, h4');
+      const headings = Array.from(previewContainerRef.current.querySelectorAll('h2, h3, h4'));
       for (const h of headings) {
         const text = (h.textContent || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         if (text.includes(clean) || clean.includes(text)) {
